@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: api-gateway
+
+---
+
+spring:
+  config:
+    activate:
+      on-profile: "!test"
+    import: configserver:${CONFIG_SERVER_URL:http://localhost:8888}

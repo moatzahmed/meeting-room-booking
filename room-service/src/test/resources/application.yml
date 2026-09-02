@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: room-service-test
+  cloud:
+    config:
+      enabled: false
+    bus:
+      enabled: false
+
+eureka:
+  client:
+    enabled: false

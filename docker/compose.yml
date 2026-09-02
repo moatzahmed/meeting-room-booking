@@ -1,0 +1,68 @@
+services:
+  room-db:
+    image: postgres:17-alpine
+    container_name: meeting-room-room-db
+    environment:
+      POSTGRES_DB: room_db
+      POSTGRES_USER: room_user
+      POSTGRES_PASSWORD: room_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - room-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U room_user -d room_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  booking-db:
+    image: postgres:17-alpine
+    container_name: meeting-room-booking-db
+    environment:
+      POSTGRES_DB: booking_db
+      POSTGRES_USER: booking_user
+      POSTGRES_PASSWORD: booking_password
+    ports:
+      - "5434:5432"
+    volumes:
+      - booking-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U booking_user -d booking_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    container_name: meeting-room-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:8-alpine
+    container_name: meeting-room-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  room-db-data:
+  booking-db-data:
+  redis-data:

@@ -1,0 +1,135 @@
+Room endpoints
+Gateway:      http://localhost:8080/api/rooms
+Method	Path		Purpose
+POST	/api/rooms	Create a room
+GET	/api/rooms	List all rooms
+GET	/api/rooms/{id}	Retrieve one room
+PATCH	/api/rooms/{id}/status	Activate or deactivate a room
+
+
+
+Booking endpoints
+Available through:
+Gateway:      http://localhost:8080/api/bookings
+
+Every Booking endpoint currently requires:
+X-User-Id: user-123
+
+Method	Path		Purpose
+POST	/api/bookings			Create a confirmed booking
+GET	/api/bookings/me		List the current user’s bookings
+GET	/api/bookings/{bookingId}	Retrieve one owned booking
+DELETE	/api/bookings/{bookingId}	Cancel one owned booking
+
+
+
+
+OpenAPI and Swagger endpoints
+Room Service
+GET http://localhost:8081/swagger-ui.html
+GET http://localhost:8081/swagger-ui/index.html
+GET http://localhost:8081/v3/api-docs
+Booking Service
+GET http://localhost:8082/swagger-ui.html
+GET http://localhost:8082/swagger-ui/index.html
+GET http://localhost:8082/v3/api-docs
+Config Server endpoints
+Base URL:
+http://localhost:8888
+Standard environment endpoint
+GET /{application}/{profile}
+GET /{application}/{profile}/{label}
+Examples:
+GET /booking-service/default
+GET /booking-service/dev
+GET /booking-service/test
+GET /booking-service/dev/main
+
+GET /room-service/default
+GET /room-service/dev
+
+GET /api-gateway/default
+GET /discovery-server/default
+Components:
+- application: value of spring.application.name
+- profile: default, dev, or test
+- label: Git branch, tag, or commit; currently usually main
+YAML and properties formats
+Config Server also provides rendered configuration formats:
+GET /{application}-{profile}.yml
+GET /{application}-{profile}.properties
+GET /{label}/{application}-{profile}.yml
+GET /{label}/{application}-{profile}.properties
+Examples:
+GET /booking-service-dev.yml
+GET /booking-service-dev.properties
+GET /main/booking-service-dev.yml
+Spring Cloud Bus refresh endpoint
+Available on Config Server and all Config Clients:
+POST /actuator/busrefresh
+Recommended trigger:
+POST http://localhost:8888/actuator/busrefresh
+This publishes a RabbitMQ refresh event to the services.
+It is an administrative endpoint and should not be exposed publicly through the Gateway.
+Actuator endpoints
+Every application also exposes:
+GET /actuator
+GET /actuator/health
+GET /actuator/info
+POST /actuator/busrefresh
+Config Server — port 8888
+GET  http://localhost:8888/actuator
+GET  http://localhost:8888/actuator/health
+GET  http://localhost:8888/actuator/info
+POST http://localhost:8888/actuator/busrefresh
+Discovery Server — port 8761
+GET  http://localhost:8761/actuator
+GET  http://localhost:8761/actuator/health
+GET  http://localhost:8761/actuator/info
+POST http://localhost:8761/actuator/busrefresh
+Room Service — port 8081
+GET  http://localhost:8081/actuator
+GET  http://localhost:8081/actuator/health
+GET  http://localhost:8081/actuator/info
+POST http://localhost:8081/actuator/busrefresh
+Booking Service — port 8082
+Booking additionally exposes Resilience4j monitoring:
+GET  /actuator
+GET  /actuator/health
+GET  /actuator/info
+POST /actuator/busrefresh
+
+GET  /actuator/bulkheads
+GET  /actuator/bulkheadevents
+GET  /actuator/circuitbreakers
+GET  /actuator/circuitbreakerevents
+GET  /actuator/retries
+GET  /actuator/retryevents
+API Gateway — port 8080
+GET  /actuator
+GET  /actuator/health
+GET  /actuator/info
+POST /actuator/busrefresh
+GET  /actuator/gateway
+The Gateway Actuator endpoint is read-only.
+Eureka endpoints
+Eureka dashboard:
+GET http://localhost:8761/
+Main registry API:
+http://localhost:8761/eureka/apps
+Useful read operations include:
+GET /eureka/apps
+GET /eureka/apps/{applicationName}
+GET /eureka/apps/{applicationName}/{instanceId}
+Examples:
+GET /eureka/apps/ROOM-SERVICE
+GET /eureka/apps/BOOKING-SERVICE
+GET /eureka/apps/API-GATEWAY
+Eureka clients also use internal registration, heartbeat, status, and deregistration operations under /eureka/apps/**. These are framework-to-framework endpoints rather than APIs application clients should call.
+RabbitMQ Management
+Management UI:
+http://localhost:15672
+AMQP broker connection—not an HTTP API:
+localhost:5672
+The RabbitMQ Management plugin also provides administrative APIs under:
+http://localhost:15672/api/**

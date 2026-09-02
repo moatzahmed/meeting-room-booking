@@ -1,0 +1,500 @@
+{
+  "info": {
+    "_postman_id": "8f08cf80-8f14-4ae2-9a1e-8c41e6d5a381",
+    "name": "Meeting Room Microservices",
+    "description": "Learning collection for Room Service and Booking Service. Run requests in collection order: create a room first, then create and manage a booking. Authentication is not implemented yet; Booking Service currently requires the temporary X-User-Id header.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('Response time is below 5 seconds', function () {",
+          "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+          "});"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost",
+      "type": "string"
+    },
+    {
+      "key": "room_service_url",
+      "value": "{{base_url}}:8081",
+      "type": "string"
+    },
+    {
+      "key": "booking_service_url",
+      "value": "{{base_url}}:8082",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "user-123",
+      "type": "string"
+    },
+    {
+      "key": "room_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "booking_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "room_status",
+      "value": "ACTIVE",
+      "type": "string"
+    },
+    {
+      "key": "booking_start_time",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "booking_end_time",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Room Service",
+      "description": "Room Service runs on port 8081 and manages room records and ACTIVE/INACTIVE status. No authentication is implemented in the current learning phase.",
+      "item": [
+        {
+          "name": "Create Room",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const suffix = Date.now();",
+                  "pm.variables.set('unique_room_name', `Nile Room ${suffix}`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Room is created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "    const room = pm.response.json();",
+                  "    pm.collectionVariables.set('room_id', String(room.id));",
+                  "    pm.test('Created room is ACTIVE', function () {",
+                  "        pm.expect(room.status).to.eql('ACTIVE');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{unique_room_name}}\",\n  \"location\": \"Floor 2 - East Wing\",\n  \"capacity\": 12\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{room_service_url}}/api/rooms",
+            "description": "Creates an ACTIVE room. The test script saves the returned id into the collection variable {{room_id}}. A timestamp suffix prevents duplicate-name conflicts when the collection is run repeatedly."
+          },
+          "response": []
+        },
+        {
+          "name": "List Rooms",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Rooms are returned', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{room_service_url}}/api/rooms",
+            "description": "Returns all rooms. This endpoint has no path or query parameters."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Room by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Requested room is returned', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(String(pm.response.json().id)).to.eql(pm.collectionVariables.get('room_id'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{room_service_url}}/api/rooms/:id",
+              "host": [
+                "{{room_service_url}}"
+              ],
+              "path": [
+                "api",
+                "rooms",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{room_id}}",
+                  "description": "ID saved by Create Room or set manually as a collection variable."
+                }
+              ]
+            },
+            "description": "Retrieves one room using the reusable {{room_id}} path variable."
+          },
+          "response": []
+        },
+        {
+          "name": "Change Room Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Room status is updated', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().status).to.eql(pm.collectionVariables.get('room_status'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"{{room_status}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{room_service_url}}/api/rooms/:id/status",
+              "host": [
+                "{{room_service_url}}"
+              ],
+              "path": [
+                "api",
+                "rooms",
+                ":id",
+                "status"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{room_id}}",
+                  "description": "Room whose status will change."
+                }
+              ]
+            },
+            "description": "Changes a room to ACTIVE or INACTIVE using {{room_status}}. It defaults to ACTIVE so a full collection run can create a booking afterward."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Booking Service",
+      "description": "Booking Service runs on port 8082. It currently has no bearer authentication; X-User-Id is a temporary required development identity header.",
+      "item": [
+        {
+          "name": "Create Booking",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const start = new Date(Date.now() + 24 * 60 * 60 * 1000);",
+                  "start.setUTCMinutes(0, 0, 0);",
+                  "const end = new Date(start.getTime() + 60 * 60 * 1000);",
+                  "pm.collectionVariables.set('booking_start_time', start.toISOString());",
+                  "pm.collectionVariables.set('booking_end_time', end.toISOString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Booking is created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "    const booking = pm.response.json();",
+                  "    pm.collectionVariables.set('booking_id', String(booking.id));",
+                  "    pm.test('Booking is confirmed for selected room and user', function () {",
+                  "        pm.expect(booking.status).to.eql('CONFIRMED');",
+                  "        pm.expect(String(booking.roomId)).to.eql(pm.collectionVariables.get('room_id'));",
+                  "        pm.expect(booking.userId).to.eql(pm.collectionVariables.get('user_id'));",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{user_id}}",
+                "type": "text",
+                "description": "Temporary development identity. This will later come from a validated JWT."
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomId\": {{room_id}},\n  \"startTime\": \"{{booking_start_time}}\",\n  \"endTime\": \"{{booking_end_time}}\",\n  \"purpose\": \"Backend architecture learning session\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{booking_service_url}}/api/bookings",
+            "description": "Creates a future one-hour booking for {{room_id}}. The pre-request script generates valid future times and the test script saves the returned id into {{booking_id}}. Room Service must be running and the room must be ACTIVE."
+          },
+          "response": []
+        },
+        {
+          "name": "List My Bookings",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Current user bookings are returned', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const bookings = pm.response.json();",
+                  "    pm.expect(bookings).to.be.an('array');",
+                  "    pm.expect(bookings.every(booking => booking.userId === pm.collectionVariables.get('user_id'))).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{user_id}}",
+                "type": "text",
+                "description": "Temporary development identity."
+              }
+            ],
+            "url": "{{booking_service_url}}/api/bookings/me",
+            "description": "Lists bookings owned by {{user_id}}. There are no query parameters."
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Booking by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Owned booking is returned', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const booking = pm.response.json();",
+                  "    pm.expect(String(booking.id)).to.eql(pm.collectionVariables.get('booking_id'));",
+                  "    pm.expect(booking.userId).to.eql(pm.collectionVariables.get('user_id'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{user_id}}",
+                "type": "text",
+                "description": "Must match the booking owner."
+              }
+            ],
+            "url": {
+              "raw": "{{booking_service_url}}/api/bookings/:bookingId",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                ":bookingId"
+              ],
+              "variable": [
+                {
+                  "key": "bookingId",
+                  "value": "{{booking_id}}",
+                  "description": "ID saved by Create Booking or set manually."
+                }
+              ]
+            },
+            "description": "Retrieves a booking only when it belongs to {{user_id}}. Missing and foreign bookings both return 404."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel My Booking",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Booking cancellation succeeds without deleting history', function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{user_id}}",
+                "type": "text",
+                "description": "Must match the booking owner."
+              }
+            ],
+            "url": {
+              "raw": "{{booking_service_url}}/api/bookings/:bookingId",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                ":bookingId"
+              ],
+              "variable": [
+                {
+                  "key": "bookingId",
+                  "value": "{{booking_id}}",
+                  "description": "Owned booking to cancel."
+                }
+              ]
+            },
+            "description": "Logically cancels the owned booking by changing its status to CANCELLED. It does not physically delete the row and is idempotent."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

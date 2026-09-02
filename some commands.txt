@@ -1,0 +1,13 @@
+Run docker compose 
+docker compose -f docker/compose.yml up -d room-db booking-db
+
+
+run tests
+mvn clean verify
+
+actuator endpoints
+/actuator/circuitbreakers
+/actuator/circuitbreakerevents
+
+config server
+http://localhost:8888/booking-service/default
