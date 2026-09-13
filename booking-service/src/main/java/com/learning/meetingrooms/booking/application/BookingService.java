@@ -19,15 +19,18 @@ public class BookingService {
     private final BookingRepository bookingRepository;
     private final BookingTimePolicy timePolicy;
     private final RoomCatalog roomCatalog;
+    private final BookingEventPublisher eventPublisher;
 
     public BookingService(
             BookingRepository bookingRepository,
             BookingTimePolicy timePolicy,
-            RoomCatalog roomCatalog
+            RoomCatalog roomCatalog,
+            BookingEventPublisher eventPublisher
     ) {
         this.bookingRepository = bookingRepository;
         this.timePolicy = timePolicy;
         this.roomCatalog = roomCatalog;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -65,12 +68,19 @@ public class BookingService {
         );
 
         try {
-            return bookingRepository.saveAndFlush(booking);
+            Booking saved = bookingRepository.saveAndFlush(booking);
+            eventPublisher.publishCreated(saved);
+            return saved;
         } catch (DataIntegrityViolationException exception) {
-            // A simultaneous request may pass the query above first. PostgreSQL is
+            // A simultaneous request may pass the query above first.  PostgreSQL is
             // the final authority and atomically rejects that race here.
             throw overlapViolation();
         }
+    }
+
+    @Transactional(readOnly = true)
+    public List<Booking> findAll() {
+        return bookingRepository.findAllByOrderByStartTimeAsc();
     }
 
     @Transactional(readOnly = true)
@@ -87,9 +97,11 @@ public class BookingService {
     public void cancelOwn(Long bookingId, String userId) {
         Booking booking = findOwnedBooking(bookingId, userId);
         booking.cancel();
-        // No explicit save is needed: JPA dirty checking detects the status change
-        // and writes it when this transaction commits.
+        bookingRepository.flush();
+        eventPublisher.publishCancelled(booking);
     }
+
+    // ── helpers ──────────────────────────────────────────────────────────────
 
     private Booking findOwnedBooking(Long bookingId, String userId) {
         return bookingRepository.findByIdAndUserId(bookingId, userId)

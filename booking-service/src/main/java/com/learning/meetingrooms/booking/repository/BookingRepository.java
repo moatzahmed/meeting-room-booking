@@ -12,6 +12,8 @@ import java.util.Optional;
 
 public interface BookingRepository extends JpaRepository<Booking, Long> {
 
+    List<Booking> findAllByOrderByStartTimeAsc();
+
     List<Booking> findAllByUserIdOrderByStartTimeAsc(String userId);
 
     Optional<Booking> findByIdAndUserId(Long id, String userId);

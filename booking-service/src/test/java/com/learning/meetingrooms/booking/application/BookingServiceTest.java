@@ -38,13 +38,16 @@ class BookingServiceTest {
 
     @Mock
     private RoomCatalog roomCatalog;
+    
+    @Mock
+    private BookingEventPublisher eventPublisher;
 
     private BookingService bookingService;
 
     @BeforeEach
     void setUp() {
         BookingTimePolicy timePolicy = new BookingTimePolicy(Clock.fixed(NOW, ZoneOffset.UTC));
-        bookingService = new BookingService(bookingRepository, timePolicy, roomCatalog);
+        bookingService = new BookingService(bookingRepository, timePolicy, roomCatalog, eventPublisher);
     }
 
     @Test
@@ -62,6 +65,7 @@ class BookingServiceTest {
         assertThat(result.getUserId()).isEqualTo("user-123");
         assertThat(result.getPurpose()).isEqualTo("Architecture discussion");
         verify(bookingRepository).saveAndFlush(any(Booking.class));
+        verify(eventPublisher).publishCreated(any(Booking.class));
     }
 
     @Test
@@ -152,6 +156,8 @@ class BookingServiceTest {
 
         assertThat(booking.getStatus()).isEqualTo(BookingStatus.CANCELLED);
         verify(bookingRepository, never()).delete(any());
+        verify(bookingRepository).flush();
+        verify(eventPublisher).publishCancelled(any(Booking.class));
     }
 
     @Test
@@ -164,6 +170,8 @@ class BookingServiceTest {
         bookingService.cancelOwn(42L, "user-123");
 
         assertThat(booking.getStatus()).isEqualTo(BookingStatus.CANCELLED);
+        verify(bookingRepository).flush();
+        verify(eventPublisher).publishCancelled(any(Booking.class));
     }
 
     private void assertRuleViolation(BookingRuleCode expectedCode) {
@@ -171,6 +179,7 @@ class BookingServiceTest {
                 .isInstanceOf(BookingRuleViolationException.class)
                 .extracting(exception -> ((BookingRuleViolationException) exception).getCode())
                 .isEqualTo(expectedCode);
+        verify(eventPublisher, never()).publishCreated(any());
     }
 
     private CreateBookingCommand command(String purpose) {

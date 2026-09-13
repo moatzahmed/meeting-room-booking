@@ -12,6 +12,9 @@ import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.http.HttpHeaders;
 import org.slf4j.MDC;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
@@ -52,6 +55,9 @@ public class RoomHttpClient implements RoomCatalog {
                     String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
                     if (StringUtils.hasText(correlationId)) {
                         request.getHeaders().set(CorrelationIdFilter.HEADER_NAME, correlationId);
+                    }
+                    if (SecurityContextHolder.getContext().getAuthentication() instanceof JwtAuthenticationToken token) {
+                        request.getHeaders().setBearerAuth(token.getToken().getTokenValue());
                     }
                     return execution.execute(request, body);
                 })

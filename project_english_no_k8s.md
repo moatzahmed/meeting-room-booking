@@ -4,39 +4,37 @@ The project is a meeting room booking system for use inside a company.
 
 The company has multiple meeting rooms, and employees can:
 
--   View available rooms.
--   Book a room for a specific time.
--   View their own bookings.
--   Cancel their own bookings.
+* View available rooms.
+* Book a room for a specific time.
+* View their own bookings.
+* Cancel their own bookings.
 
 Administrators can:
 
--   Add rooms.
--   Enable or disable rooms.
--   View all bookings.
+* Add rooms.
+* Enable or disable rooms.
+* View all bookings.
 
-The business domain is intentionally small, but the project is designed
-to apply the most important concepts in:
+The business domain is intentionally small, but the project is designed to apply the most important concepts in:
 
--   Spring Boot
--   Microservices
--   Security
--   Resilience
--   Messaging
--   Observability
--   Docker
--   Continuous Integration
+* Spring Boot
+* Microservices
+* Security
+* Resilience
+* Messaging
+* Observability
+* Docker
+* Continuous Integration
 
-The goal is to use every technology for a real reason instead of adding
-technologies only for the sake of using them.
+The goal is to use every technology for a real reason instead of adding technologies only for the sake of using them.
 
-------------------------------------------------------------------------
+---
 
 # Architecture
 
 Use only **3 business microservices**:
 
-``` text
+```text
                     ┌───────────────┐
                     │   Keycloak    │
                     │ OAuth2 / OIDC │
@@ -69,23 +67,23 @@ Client
 │ Availability    │            │ Event Publisher  │
 └─────────────────┘            └─────────┬────────┘
                                         │
-                                        │ Kafka
+                                        │ RabbitMQ
                                         ▼
                               ┌────────────────────┐
                               │ Notification Svc   │
                               │                    │
-                              │ Kafka Consumer     │
+                              │ RabbitMQ Consumer  │
                               │ Mock Notification  │
                               └────────────────────┘
 ```
 
 Supporting infrastructure:
 
-``` text
+```text
 Config Server
 Eureka Server
 Redis
-Kafka
+RabbitMQ
 Keycloak
 
 Prometheus
@@ -96,7 +94,7 @@ Grafana
 
 Development and CI tooling:
 
-``` text
+```text
 GitHub
 GitHub Actions
 Docker Registry / GHCR
@@ -104,7 +102,7 @@ Docker
 Docker Compose
 ```
 
-------------------------------------------------------------------------
+---
 
 # Business Services
 
@@ -112,7 +110,7 @@ Docker Compose
 
 Responsibilities:
 
-``` text
+```text
 Rooms
 Room Status
 Room Information
@@ -121,7 +119,7 @@ Availability
 
 A room can contain:
 
-``` text
+```text
 id
 name
 location
@@ -134,12 +132,12 @@ updatedAt
 
 Room status:
 
-``` text
+```text
 ACTIVE
 INACTIVE
 ```
 
-------------------------------------------------------------------------
+---
 
 # 2. Booking Service
 
@@ -147,17 +145,17 @@ This is the most important service in the project.
 
 Responsibilities:
 
-``` text
+```text
 Reservations
 Booking Business Rules
 Room Availability Check
 Booking Cancellation
-Kafka Event Publishing
+RabbitMQ Event Publishing
 ```
 
 A booking can contain:
 
-``` text
+```text
 id
 roomId
 userId
@@ -171,12 +169,12 @@ updatedAt
 
 Booking status:
 
-``` text
+```text
 CONFIRMED
 CANCELLED
 ```
 
-------------------------------------------------------------------------
+---
 
 # 3. Notification Service
 
@@ -184,16 +182,16 @@ This is a very small service.
 
 It does not need a public CRUD API.
 
-It is simply a Kafka consumer that listens for:
+It is simply a RabbitMQ consumer that listens for:
 
-``` text
+```text
 BookingCreatedEvent
 BookingCancelledEvent
 ```
 
 Initially, it can only log a notification:
 
-``` text
+```text
 Booking confirmed for user c65c...
 Room: 15
 Time: 10:00 - 11:00
@@ -203,7 +201,7 @@ Storing notifications in a small database is optional.
 
 The following are intentionally out of scope:
 
-``` text
+```text
 SendGrid
 SMTP
 Twilio
@@ -213,19 +211,19 @@ SMS
 
 They do not add enough value to the main learning goals of this project.
 
-------------------------------------------------------------------------
+---
 
 # Database Architecture
 
 Use:
 
-``` text
+```text
 Database per Service
 ```
 
 For example:
 
-``` text
+```text
 Room Service
      │
      ▼
@@ -235,7 +233,7 @@ PostgreSQL
 
 And:
 
-``` text
+```text
 Booking Service
      │
      ▼
@@ -245,7 +243,7 @@ PostgreSQL
 
 Do not use:
 
-``` text
+```text
 Room Service ─┐
               ├── Shared Database ❌
 Booking Svc ──┘
@@ -253,30 +251,30 @@ Booking Svc ──┘
 
 Each service owns its own data.
 
-------------------------------------------------------------------------
+---
 
 # Main Booking Flow
 
 The user sends:
 
-``` http
+```text
 POST /api/bookings
 ```
 
 Request body:
 
-``` json
+```json
 {
   "roomId": 15,
-  "startTime": "2026-09-01T10:00:00",
-  "endTime": "2026-09-01T11:00:00",
+  "startTime": "2026-09-10T10:00:00",
+  "endTime": "2026-09-10T11:00:00",
   "purpose": "Backend Team Meeting"
 }
 ```
 
 The request enters through:
 
-``` text
+```text
 Client
   │
   ▼
@@ -291,7 +289,7 @@ Booking Service
 
 The Booking Service extracts:
 
-``` text
+```text
 userId
 ```
 
@@ -299,7 +297,7 @@ from the JWT.
 
 It then makes a synchronous call using OpenFeign:
 
-``` text
+```text
 Booking Service
       │
       │ OpenFeign
@@ -309,7 +307,7 @@ Room Service
 
 The request asks:
 
-``` text
+```text
 Is room 15 available
 between
 10:00 and 11:00?
@@ -317,7 +315,7 @@ between
 
 The Room Service validates:
 
-``` text
+```text
 Room exists?
      ↓
 Room ACTIVE?
@@ -329,7 +327,7 @@ available = true
 
 If the room is available:
 
-``` text
+```text
 Room Service
       │
       │ available = true
@@ -341,13 +339,17 @@ Booking Service
       └── Publish Event
               │
               ▼
-      BookingCreatedEvent
+       BookingCreatedEvent
               │
               ▼
-            Kafka
+      booking.exchange
+              │
+              │ booking.created
+              ▼
+ notification.booking.queue
               │
               ▼
-      Notification Service
+     Notification Service
               │
               ▼
       "Booking confirmed"
@@ -357,7 +359,7 @@ This applies two communication styles for clear reasons.
 
 Synchronous communication:
 
-``` text
+```text
 Booking → Room
 Synchronous
 OpenFeign
@@ -366,102 +368,60 @@ Request / Response
 
 Asynchronous communication:
 
-``` text
+```text
 Booking → Notification
 Asynchronous
-Kafka
+RabbitMQ
 Event Driven
 ```
 
-This is better than using Kafka for every interaction simply because it
-is available.
+This is better than using RabbitMQ for every interaction simply because it is available.
 
-------------------------------------------------------------------------
+---
 
 # Technology Map
 
-  -----------------------------------------------------------------------
-  Technology                          Purpose
-  ----------------------------------- -----------------------------------
-  Spring Boot                         All services
+| Technology                   | Purpose                                                 |
+| ---------------------------- | ------------------------------------------------------- |
+| Spring Boot                  | All services                                            |
+| REST API                     | Room and Booking APIs                                   |
+| DTO                          | Requests and responses                                  |
+| Bean Validation              | Validate booking times and request fields               |
+| Exception Handling           | Room unavailable, booking not found, and similar errors |
+| Spring Data JPA              | Room and Booking persistence                            |
+| PostgreSQL                   | Database per service                                    |
+| Auditing                     | `createdAt`, `createdBy`, and related fields            |
+| OpenAPI / Swagger            | API documentation                                       |
+| Config Server                | Centralized configuration                               |
+| Eureka                       | Service discovery                                       |
+| OpenFeign                    | Booking → Room communication                            |
+| API Gateway                  | Single entry point                                      |
+| Gateway Filters              | Logging and Correlation ID                              |
+| Resilience4j Circuit Breaker | Protect Booking → Room calls                            |
+| Retry                        | Handle temporary Room Service failures                  |
+| Timeout                      | Prevent indefinite waiting                              |
+| Bulkhead                     | Isolate Room Service calls                              |
+| Redis Rate Limiter           | Gateway rate limiting                                   |
+| OAuth2 / OIDC                | Authentication through Keycloak                         |
+| Spring Security              | JWT resource servers and authorization                  |
+| RabbitMQ                     | Booking Created / Cancelled events                      |
+| Spring AMQP                  | RabbitMQ integration in Spring Boot                     |
+| Actuator                     | Health and metrics endpoints                            |
+| Micrometer                   | Application metrics                                     |
+| Prometheus                   | Metrics collection                                      |
+| Loki                         | Centralized logs                                        |
+| Tempo                        | Distributed tracing                                     |
+| Grafana                      | Dashboards                                              |
+| Docker                       | Image for each service                                  |
+| Docker Compose               | Local environment                                       |
+| GitHub                       | Source control                                          |
+| GitHub Actions               | Continuous Integration                                  |
+| JaCoCo                       | Code coverage                                           |
+| Testcontainers               | Integration testing                                     |
+| WireMock                     | Mock Room Service calls                                 |
+| Trivy                        | Container security scanning                             |
 
-  REST API                            Room and Booking APIs
-
-  DTO                                 Requests and responses
-
-  Bean Validation                     Validate booking times and request
-                                      fields
-
-  Exception Handling                  Room unavailable, booking not
-                                      found, and similar errors
-
-  Spring Data JPA                     Room and Booking persistence
-
-  PostgreSQL                          Database per service
-
-  Auditing                            `createdAt`, `createdBy`, and
-                                      related fields
-
-  OpenAPI / Swagger                   API documentation
-
-  Config Server                       Centralized configuration
-
-  Eureka                              Service discovery
-
-  OpenFeign                           Booking → Room communication
-
-  API Gateway                         Single entry point
-
-  Gateway Filters                     Logging and Correlation ID
-
-  Resilience4j Circuit Breaker        Protect Booking → Room calls
-
-  Retry                               Handle temporary Room Service
-                                      failures
-
-  Timeout                             Prevent indefinite waiting
-
-  Bulkhead                            Isolate Room Service calls
-
-  Redis Rate Limiter                  Gateway rate limiting
-
-  OAuth2 / OIDC                       Authentication through Keycloak
-
-  Spring Security                     JWT resource servers and
-                                      authorization
-
-  Kafka                               Booking Created / Cancelled events
-
-  Actuator                            Health and metrics endpoints
-
-  Micrometer                          Application metrics
-
-  Prometheus                          Metrics collection
-
-  Loki                                Centralized logs
-
-  Tempo                               Distributed tracing
-
-  Grafana                             Dashboards
-
-  Docker                              Image for each service
-
-  Docker Compose                      Local environment
-
-  GitHub                              Source control
-
-  GitHub Actions                      Continuous Integration
-
-  JaCoCo                              Code coverage
-
-  Testcontainers                      Integration testing
-
-  WireMock                            Mock Room Service calls
-
-  Trivy                               Container security scanning
-  -----------------------------------------------------------------------
-
-------------------------------------------------------------------------
+---
 
 # APIs
 
@@ -471,7 +431,7 @@ Do not build full CRUD for every entity just for practice.
 
 The following endpoints are enough:
 
-``` http
+```text
 POST /api/rooms
 
 GET /api/rooms
@@ -485,15 +445,15 @@ GET /api/rooms/{id}/availability
 
 Availability example:
 
-``` http
+```text
 GET /api/rooms/15/availability
-    ?start=2026-09-01T10:00:00
-    &end=2026-09-01T11:00:00
+    ?start=2026-09-10T10:00:00
+    &end=2026-09-10T11:00:00
 ```
 
 Example response:
 
-``` json
+```json
 {
   "roomId": 15,
   "available": true
@@ -502,7 +462,7 @@ Example response:
 
 Authorization:
 
-``` text
+```text
 POST /api/rooms
 ADMIN only
 
@@ -512,19 +472,19 @@ ADMIN only
 
 The following endpoints can be used by both `USER` and `ADMIN`:
 
-``` text
+```text
 GET rooms
 GET room
 GET availability
 ```
 
-------------------------------------------------------------------------
+---
 
 # Booking Service APIs
 
 Use:
 
-``` http
+```text
 POST /api/bookings
 
 GET /api/bookings/me
@@ -536,7 +496,7 @@ DELETE /api/bookings/{id}
 
 For administrators:
 
-``` http
+```text
 GET /api/bookings
 ```
 
@@ -544,7 +504,7 @@ This allows an administrator to see all bookings.
 
 Treat:
 
-``` http
+```text
 DELETE /api/bookings/{id}
 ```
 
@@ -552,13 +512,13 @@ as cancellation rather than a physical database delete.
 
 Update:
 
-``` text
+```text
 status = CANCELLED
 ```
 
 instead of deleting the record.
 
-------------------------------------------------------------------------
+---
 
 # Core Business Rules
 
@@ -566,73 +526,73 @@ These rules are among the most important parts of the project.
 
 The project should not become nothing more than:
 
-``` java
+```java
 repository.save(entity);
 ```
 
-## Rule 1 --- Valid Time Range
+## Rule 1 — Valid Time Range
 
-``` text
+```text
 startTime < endTime
 ```
 
 Invalid example:
 
-``` text
+```text
 Start: 12:00
 End:   11:00
 ```
 
-## Rule 2 --- No Booking in the Past
+## Rule 2 — No Booking in the Past
 
-``` text
+```text
 startTime > currentTime
 ```
 
-## Rule 3 --- Maximum Meeting Duration
+## Rule 3 — Maximum Meeting Duration
 
 Meeting duration must be:
 
-``` text
+```text
 <= 4 Hours
 ```
 
 Examples:
 
-``` text
+```text
 10:00 → 13:00 ✅
 10:00 → 15:30 ❌
 ```
 
-## Rule 4 --- Active Room
+## Rule 4 — Active Room
 
 The room must be:
 
-``` text
+```text
 ACTIVE
 ```
 
 If it is:
 
-``` text
+```text
 INACTIVE
 ```
 
 the booking must be rejected.
 
-## Rule 5 --- No Overlapping Bookings
+## Rule 5 — No Overlapping Bookings
 
 This is the most important booking rule.
 
 Existing booking:
 
-``` text
+```text
 10:00 ─────────────── 11:00
 ```
 
 New request:
 
-``` text
+```text
 10:30 ─────────────── 11:30
 
         ❌ Conflict
@@ -640,7 +600,7 @@ New request:
 
 Examples:
 
-``` text
+```text
 Existing:
 10:00 ───────── 11:00
 
@@ -654,43 +614,43 @@ Requests:
 
 This gives you a real business query instead of simple CRUD.
 
-## Rule 6 --- Booking Ownership
+## Rule 6 — Booking Ownership
 
 A user can cancel:
 
-``` text
+```text
 Only their own booking
 ```
 
-User A must not be allowed to cancel User B's booking.
+User A must not be allowed to cancel User B’s booking.
 
-## Rule 7 --- Booking Visibility
+## Rule 7 — Booking Visibility
 
 An `ADMIN` can:
 
-``` text
+```text
 See all bookings
 ```
 
 A `USER` can see:
 
-``` text
+```text
 Only their own bookings
 ```
 
-------------------------------------------------------------------------
+---
 
 # Security
 
 Use:
 
-``` text
+```text
 Keycloak
 ```
 
 Do not create:
 
-``` text
+```text
 User Service
 ```
 
@@ -698,14 +658,14 @@ Do not build an authentication system from scratch.
 
 Use only two roles:
 
-``` text
+```text
 ROLE_USER
 ROLE_ADMIN
 ```
 
 ## USER Permissions
 
-``` text
+```text
 View rooms
 Search rooms
 Check availability
@@ -716,7 +676,7 @@ Cancel own booking
 
 ## ADMIN Permissions
 
-``` text
+```text
 Add Room
 Disable Room
 Enable Room
@@ -726,7 +686,7 @@ View All Bookings
 
 ## Authentication Flow
 
-``` text
+```text
 User
   │
   ▼
@@ -744,12 +704,11 @@ API Gateway
 Microservices
 ```
 
-The services must also validate JWTs themselves. Do not rely only on
-gateway security.
+The services must also validate JWTs themselves. Do not rely only on gateway security.
 
 Use:
 
-``` text
+```text
 Gateway
    +
 Services
@@ -759,7 +718,7 @@ as resource servers.
 
 This covers:
 
-``` text
+```text
 OAuth2
 OpenID Connect
 JWT
@@ -770,13 +729,13 @@ Spring Security
 
 without building a custom authentication system.
 
-------------------------------------------------------------------------
+---
 
 # Resilience4j
 
 A critical synchronous dependency is:
 
-``` text
+```text
 Booking Service
       │
       │ OpenFeign
@@ -784,12 +743,11 @@ Booking Service
 Room Service
 ```
 
-If the Room Service fails, the Booking Service must not wait
-indefinitely.
+If the Room Service fails, the Booking Service must not wait indefinitely.
 
 Use:
 
-``` text
+```text
 Timeout
 Retry
 Circuit Breaker
@@ -800,7 +758,7 @@ Bulkhead
 
 If the Room Service does not respond within the configured time:
 
-``` text
+```text
 Fail Fast
 ```
 
@@ -808,7 +766,7 @@ Fail Fast
 
 For a temporary failure:
 
-``` text
+```text
 Booking
    │
    ▼
@@ -828,7 +786,7 @@ Do not retry dozens of times.
 
 Stop the Room Service during testing and observe:
 
-``` text
+```text
 CLOSED
    │
    │ failures
@@ -846,11 +804,11 @@ CLOSED
 
 If the Room Service is unavailable, the Booking Service can return:
 
-``` http
+```text
 503 Service Unavailable
 ```
 
-``` json
+```json
 {
   "code": "ROOM_SERVICE_UNAVAILABLE",
   "message": "Room availability cannot be checked currently"
@@ -861,32 +819,31 @@ If the Room Service is unavailable, the Booking Service can return:
 
 Apply a bulkhead to:
 
-``` text
+```text
 Booking → Room
 ```
 
-If the Room Service becomes slow or unstable, its calls should not
-consume all Booking Service resources.
+If the Room Service becomes slow or unstable, its calls should not consume all Booking Service resources.
 
-------------------------------------------------------------------------
+---
 
 # Redis Rate Limiting
 
 Apply rate limiting at:
 
-``` text
+```text
 API Gateway
 ```
 
 especially for:
 
-``` http
+```text
 POST /api/bookings
 ```
 
 For example:
 
-``` text
+```text
 10 booking requests / minute / user
 ```
 
@@ -894,7 +851,7 @@ The exact limit can be adjusted.
 
 Flow:
 
-``` text
+```text
 User
  │
  ▼
@@ -908,91 +865,487 @@ Redis Rate Limiter
  └── Exceeded → 429 Too Many Requests
 ```
 
-------------------------------------------------------------------------
+---
 
-# Kafka
+# RabbitMQ
 
-Do not use Kafka for everything.
+Do not use RabbitMQ for everything.
 
-Use one topic such as:
+Use RabbitMQ specifically for communication where the producer does not need an immediate response from the consumer.
 
-``` text
-booking-events
+For this project:
+
+```text
+Booking Service
+      │
+      ▼
+RabbitMQ
+      │
+      ▼
+Notification Service
 ```
 
-Main events:
+Use one topic exchange:
 
-``` text
-BookingCreatedEvent
-BookingCancelledEvent
+```text
+booking.exchange
 ```
 
-## BookingCreatedEvent
+Exchange type:
+
+```text
+topic
+```
+
+Main routing keys:
+
+```text
+booking.created
+booking.cancelled
+```
+
+Use a notification queue:
+
+```text
+notification.booking.queue
+```
+
+Bindings:
+
+```text
+booking.exchange
+      │
+      ├── booking.created
+      │          │
+      │          ▼
+      │   notification.booking.queue
+      │
+      └── booking.cancelled
+                 │
+                 ▼
+          notification.booking.queue
+```
+
+This lets the Notification Service consume both event types from one queue.
+
+---
+
+## RabbitMQ Topology
+
+```text
+                   Booking Service
+                         │
+                         │ publish event
+                         ▼
+                  booking.exchange
+                    type: topic
+                         │
+             ┌───────────┴────────────┐
+             │                        │
+             │ booking.created        │ booking.cancelled
+             │                        │
+             └───────────┬────────────┘
+                         ▼
+              notification.booking.queue
+                         │
+                         ▼
+               Notification Service
+```
+
+The exchange routes messages.
+
+The queue stores messages until they are consumed.
+
+The routing key determines how a message is routed from the exchange to the queue.
+
+---
+
+# BookingCreatedEvent
 
 Example:
 
-``` json
+```json
 {
   "eventId": "9496c45f...",
   "eventType": "BOOKING_CREATED",
   "bookingId": 812,
   "userId": "c65c...",
   "roomId": 15,
-  "startTime": "2026-09-01T10:00:00",
-  "endTime": "2026-09-01T11:00:00",
-  "occurredAt": "2026-08-29T12:30:00"
+  "startTime": "2026-09-10T10:00:00",
+  "endTime": "2026-09-10T11:00:00",
+  "occurredAt": "2026-09-04T12:30:00"
 }
 ```
 
-## BookingCancelledEvent
+Publish using routing key:
+
+```text
+booking.created
+```
+
+Flow:
+
+```text
+Booking Service
+      │
+      ▼
+BookingCreatedEvent
+      │
+      ▼
+booking.exchange
+      │
+      │ routing key = booking.created
+      ▼
+notification.booking.queue
+      │
+      ▼
+Notification Service
+```
+
+---
+
+# BookingCancelledEvent
 
 Example:
 
-``` json
+```json
 {
   "eventId": "1c6a...",
   "eventType": "BOOKING_CANCELLED",
   "bookingId": 812,
   "userId": "c65c...",
   "roomId": 15,
-  "occurredAt": "2026-08-29T14:00:00"
+  "occurredAt": "2026-09-04T14:00:00"
 }
 ```
 
-Notification Service:
+Publish using:
 
-``` text
-Kafka Consumer
+```text
+booking.cancelled
+```
+
+Flow:
+
+```text
+Booking Service
+      │
+      ▼
+BookingCancelledEvent
+      │
+      ▼
+booking.exchange
+      │
+      │ routing key = booking.cancelled
+      ▼
+notification.booking.queue
+      │
+      ▼
+Notification Service
+```
+
+---
+
+# RabbitMQ Producer
+
+Booking Service is the producer.
+
+Use:
+
+```text
+Spring AMQP
+RabbitTemplate
+```
+
+Conceptually:
+
+```java
+rabbitTemplate.convertAndSend(
+        "booking.exchange",
+        "booking.created",
+        bookingCreatedEvent
+);
+```
+
+For cancellation:
+
+```java
+rabbitTemplate.convertAndSend(
+        "booking.exchange",
+        "booking.cancelled",
+        bookingCancelledEvent
+);
+```
+
+The controller should not publish directly.
+
+Prefer:
+
+```text
+Controller
+    │
+    ▼
+Booking Service
+    │
+    ├── Business Logic
+    ├── Save Booking
+    └── Event Publisher
+             │
+             ▼
+          RabbitMQ
+```
+
+---
+
+# RabbitMQ Consumer
+
+Notification Service consumes events.
+
+Use:
+
+```text
+@RabbitListener
+```
+
+Conceptually:
+
+```java
+@RabbitListener(queues = "notification.booking.queue")
+public void consumeBookingEvent(BookingEvent event) {
+    // process notification
+}
+```
+
+The consumer can inspect:
+
+```text
+eventType
+```
+
+and decide whether the event represents:
+
+```text
+BOOKING_CREATED
+BOOKING_CANCELLED
+```
+
+Alternatively, separate queues or listeners can be introduced later if necessary.
+
+For this project, one notification queue is enough.
+
+---
+
+# Durable Messaging
+
+Configure:
+
+```text
+Durable Exchange
+Durable Queue
+Persistent Messages
+```
+
+The goal is that temporary service restarts should not automatically cause notifications to disappear.
+
+Conceptually:
+
+```text
+Booking Service
+      │
+      ▼
+RabbitMQ
+      │
+      │ Notification Service temporarily stopped
+      │
+      ▼
+Message remains in queue
+      │
+      │ Notification Service starts again
+      ▼
+Message consumed
+```
+
+This demonstrates an important benefit of asynchronous messaging.
+
+---
+
+# Message Acknowledgement
+
+The Notification Service should acknowledge a message after it has been processed successfully.
+
+Conceptually:
+
+```text
+RabbitMQ
+   │
+   ▼
+Notification Service
+   │
+   ├── Processing succeeds
+   │        ↓
+   │       ACK
+   │
+   └── Processing fails
+            ↓
+          Retry / Reject
+```
+
+Do not acknowledge a message before important processing has completed.
+
+---
+
+# RabbitMQ Retry
+
+Temporary consumer failures can happen.
+
+For example:
+
+```text
+Notification Service
        │
        ▼
-booking-events
+Process Message
        │
-       ├── BookingCreated
-       └── BookingCancelled
+       X
+       │
+      Retry
+       │
+       ▼
+Process Again
 ```
 
-This makes the difference clear:
+Retries must be bounded.
 
-``` text
-Feign
-Synchronous
+Do not retry forever.
+
+Example strategy:
+
+```text
+Initial attempt
+     ↓
+Retry 1
+     ↓
+Retry 2
+     ↓
+Retry 3
+     ↓
+Dead Letter Queue
+```
+
+---
+
+# Dead Letter Queue
+
+Add a dead-letter queue for messages that cannot be processed successfully.
+
+Use:
+
+```text
+notification.booking.dlq
+```
+
+Conceptual topology:
+
+```text
+Booking Service
+      │
+      ▼
+booking.exchange
+      │
+      ▼
+notification.booking.queue
+      │
+      ▼
+Notification Service
+      │
+      ├── Success → ACK
+      │
+      └── Repeated Failure
+                   │
+                   ▼
+         notification.booking.dlq
+```
+
+The DLQ prevents repeatedly failing messages from blocking normal processing.
+
+It also gives you a realistic messaging failure scenario to inspect during development.
+
+---
+
+# Idempotent Consumers
+
+RabbitMQ can redeliver a message in some failure scenarios.
+
+Therefore Notification Service should be designed so that processing the same event twice does not create harmful duplicate behavior.
+
+Each event already contains:
+
+```text
+eventId
+```
+
+The Notification Service can optionally track processed event IDs.
+
+Conceptually:
+
+```text
+Receive event
+     │
+     ▼
+eventId already processed?
+     │
+ ┌───┴────┐
+ │        │
+Yes       No
+ │        │
+ ▼        ▼
+ACK     Process
+          │
+          ▼
+       Store eventId
+          │
+          ▼
+         ACK
+```
+
+For the initial project, logging the notification makes duplicates harmless.
+
+If notification persistence is introduced later, idempotency becomes more important.
+
+---
+
+# Messaging Communication Difference
+
+This project deliberately demonstrates two communication models.
+
+## Synchronous
+
+```text
+Booking → Room
+OpenFeign
 Request / Response
+Immediate result required
 ```
 
-versus:
+Booking cannot continue without knowing whether the room is available.
 
-``` text
-Kafka
-Asynchronous
+## Asynchronous
+
+```text
+Booking → RabbitMQ → Notification
 Event Driven
+No immediate response required
 ```
 
-------------------------------------------------------------------------
+Booking creation should not wait for notification processing.
+
+This is the architectural reason RabbitMQ exists in this project.
+
+---
 
 # Testing Strategy
 
-Testing is important because it becomes the foundation of the CI
-pipeline.
+Testing is important because it becomes the foundation of the CI pipeline.
 
 Use three main levels.
 
@@ -1002,7 +1355,7 @@ Focus on business logic, especially in Booking Service.
 
 Test:
 
-``` text
+```text
 startTime before endTime
 cannot book in past
 duration <= 4 hours
@@ -1013,11 +1366,13 @@ user cannot cancel another user's booking
 
 Test all overlap cases.
 
-## Repository / Integration Tests
+---
+
+# Repository / Integration Tests
 
 Use:
 
-``` text
+```text
 Testcontainers
 ```
 
@@ -1025,14 +1380,13 @@ with PostgreSQL.
 
 Prefer this over:
 
-``` text
+```text
 H2
 ```
 
-because integration tests should run against a real PostgreSQL instance
-inside a container.
+because integration tests should run against a real PostgreSQL instance inside a container.
 
-``` text
+```text
 JUnit
   │
   ▼
@@ -1044,26 +1398,27 @@ PostgreSQL Container
 
 Test:
 
-``` text
+```text
 Repository Queries
 Overlap Query
 REST + Database Integration
 ```
 
-## Feign Integration Testing
+---
 
-Booking Service depends on Room Service, but the real Room Service does
-not need to run in every integration test.
+# Feign Integration Testing
+
+Booking Service depends on Room Service, but the real Room Service does not need to run in every integration test.
 
 Use:
 
-``` text
+```text
 WireMock
 ```
 
 Flow:
 
-``` text
+```text
 Booking Service
       │
       │ HTTP
@@ -1075,7 +1430,7 @@ WireMock
 
 One test can return:
 
-``` json
+```json
 {
   "available": true
 }
@@ -1083,13 +1438,13 @@ One test can return:
 
 and verify:
 
-``` text
+```text
 Booking created successfully
 ```
 
 Another can return:
 
-``` json
+```json
 {
   "available": false
 }
@@ -1097,21 +1452,23 @@ Another can return:
 
 and verify that Booking Service returns:
 
-``` text
+```text
 409 Conflict
 ```
 
-## Kafka Integration Testing
+---
 
-When Kafka is introduced, use:
+# RabbitMQ Integration Testing
 
-``` text
-Kafka Testcontainer
+When RabbitMQ is introduced, use:
+
+```text
+RabbitMQ Testcontainer
 ```
 
 Test:
 
-``` text
+```text
 Create Booking
      │
      ▼
@@ -1121,26 +1478,71 @@ Booking Saved
 BookingCreatedEvent
      │
      ▼
-Kafka Topic
+RabbitMQ Exchange
+     │
+     ▼
+RabbitMQ Queue
 ```
 
 Verify:
 
-``` text
+```text
 event published successfully
 ```
 
 In Notification Service, verify that the consumer receives the event.
 
-------------------------------------------------------------------------
+Example:
 
-# Continuous Integration --- CI
+```text
+JUnit
+   │
+   ▼
+RabbitMQ Testcontainer
+   │
+   ▼
+Start Booking Service
+   │
+   ▼
+Publish BookingCreatedEvent
+   │
+   ▼
+notification.booking.queue
+   │
+   ▼
+Notification Consumer
+   │
+   ▼
+Assertion
+```
+
+Also test:
+
+```text
+BookingCreatedEvent
+BookingCancelledEvent
+Correct routing key
+Correct queue binding
+Consumer receives message
+```
+
+Optionally test:
+
+```text
+Repeated failure
+      ↓
+Dead Letter Queue
+```
+
+---
+
+# Continuous Integration — CI
 
 Do not wait until the end of the project to add CI.
 
 As soon as you have:
 
-``` text
+```text
 Room Service
 Booking Service
 Tests
@@ -1150,7 +1552,7 @@ add GitHub Actions.
 
 Every:
 
-``` text
+```text
 Push
 or
 Pull Request
@@ -1160,7 +1562,7 @@ should automatically verify that the project is healthy.
 
 Example pipeline:
 
-``` text
+```text
 Developer
     │
     ▼
@@ -1187,29 +1589,31 @@ CI PASS ✅
 
 If any step fails:
 
-``` text
+```text
 CI FAIL ❌
 ```
 
 and merging should be blocked.
 
-## CI Command
+---
+
+# CI Command
 
 The main project verification command should be:
 
-``` bash
+```bash
 ./mvnw clean verify
 ```
 
 not only:
 
-``` bash
+```bash
 mvn test
 ```
 
 The desired lifecycle is approximately:
 
-``` text
+```text
 compile
    ↓
 unit tests
@@ -1223,19 +1627,19 @@ verify
 
 Use the same command:
 
-``` text
+```text
 Locally
    +
 GitHub Actions
 ```
 
-------------------------------------------------------------------------
+---
 
 # Monorepo Structure
 
 A monorepo is a good fit for this learning project:
 
-``` text
+```text
 meeting-room-booking/
 │
 ├── room-service/
@@ -1278,16 +1682,15 @@ meeting-room-booking/
 └── README.md
 ```
 
-Separate repositories for every microservice are unnecessary here and
-would add overhead without much learning value.
+Separate repositories for every microservice are unnecessary here and would add overhead without much learning value.
 
-------------------------------------------------------------------------
+---
 
 # GitHub Actions CI
 
 Start with a simple pipeline:
 
-``` text
+```text
 Push / PR
    │
    ▼
@@ -1302,29 +1705,29 @@ Verify
 
 As the number of services grows, use a:
 
-``` text
+```text
 Matrix Strategy
 ```
 
 Example:
 
-``` text
+```text
                  GitHub Actions
                        │
-           ┌───────────┼────────────┐
-           ▼           ▼            ▼
-       Room CI     Booking CI   Gateway CI
-           │           │            │
-        verify       verify       verify
-           │           │            │
-           └───────────┼────────────┘
+            ┌──────────┼────────────┐
+            ▼          ▼            ▼
+        Room CI    Booking CI   Gateway CI
+            │          │            │
+         verify      verify       verify
+            │          │            │
+            └──────────┼────────────┘
                        ▼
                     CI PASS
 ```
 
 After adding Notification Service, verify:
 
-``` text
+```text
 Room
 Booking
 Notification
@@ -1335,13 +1738,13 @@ Discovery Server
 
 independently where appropriate.
 
-------------------------------------------------------------------------
+---
 
 # JaCoCo
 
 Add:
 
-``` text
+```text
 JaCoCo
 ```
 
@@ -1349,29 +1752,30 @@ for code coverage.
 
 Do not turn the project into a competition for:
 
-``` text
+```text
 100% Coverage
 ```
 
 Prioritize:
 
-``` text
+```text
 Booking Business Rules
 Overlap Logic
 Cancellation Authorization
 Room Availability
-Kafka Event Publishing
+RabbitMQ Event Publishing
+RabbitMQ Event Consumption
 ```
 
 You can use a threshold such as:
 
-``` text
+```text
 70%
 ```
 
 so:
 
-``` text
+```text
 Coverage >= 70%
        │
        ▼
@@ -1380,11 +1784,11 @@ CI PASS
 
 Otherwise:
 
-``` text
+```text
 CI FAIL
 ```
 
-------------------------------------------------------------------------
+---
 
 # Docker in CI
 
@@ -1392,7 +1796,7 @@ When the project reaches the Docker phase, extend CI.
 
 Instead of:
 
-``` text
+```text
 Build
 Tests
 Verify
@@ -1400,7 +1804,7 @@ Verify
 
 use:
 
-``` text
+```text
 Build
    ↓
 Tests
@@ -1412,7 +1816,7 @@ Docker Image Build
 
 The initial goal is to verify:
 
-``` text
+```text
 Dockerfile works
 Image builds successfully
 Application packages correctly
@@ -1420,19 +1824,19 @@ Application packages correctly
 
 Pushing images is not required from the first day.
 
-------------------------------------------------------------------------
+---
 
 # Security Scan
 
 After Docker image creation, add:
 
-``` text
+```text
 Trivy
 ```
 
 Example:
 
-``` text
+```text
 Docker Image
     │
     ▼
@@ -1446,22 +1850,21 @@ Trivy Scan
 
 You can configure the pipeline to fail only for:
 
-``` text
+```text
 HIGH
 or
 CRITICAL
 ```
 
-This adds a useful DevSecOps practice without overcomplicating the
-project.
+This adds a useful DevSecOps practice without overcomplicating the project.
 
-------------------------------------------------------------------------
+---
 
 # Docker Image Tags
 
 Do not use only:
 
-``` text
+```text
 latest
 ```
 
@@ -1469,7 +1872,7 @@ Prefer the Git commit SHA.
 
 Example:
 
-``` text
+```text
 room-service:8d65caa
 booking-service:8d65caa
 notification-service:8d65caa
@@ -1477,19 +1880,19 @@ notification-service:8d65caa
 
 This gives traceability:
 
-``` text
+```text
 Git Commit
      ↓
 Docker Image
 ```
 
-------------------------------------------------------------------------
+---
 
 # Pull Request Workflow
 
 Use branches such as:
 
-``` text
+```text
 main
 develop
 feature/*
@@ -1497,13 +1900,13 @@ feature/*
 
 Example:
 
-``` text
+```text
 feature/booking-overlap-validation
 ```
 
 Flow:
 
-``` text
+```text
 Developer
     │
     ▼
@@ -1530,41 +1933,40 @@ Merge
 
 Enable branch protection on:
 
-``` text
+```text
 main
 ```
 
 Rules:
 
-``` text
+```text
 ❌ Direct Push
 ✅ Pull Request
 ✅ CI must pass
 ✅ Then Merge
 ```
 
-This demonstrates that CI is genuinely part of the development process
-rather than just a YAML file stored in the repository.
+This demonstrates that CI is genuinely part of the development process rather than just a YAML file stored in the repository.
 
-------------------------------------------------------------------------
+---
 
 # Config Server
 
 Add:
 
-``` text
+```text
 Spring Cloud Config Server
 ```
 
 for:
 
-``` text
+```text
 Centralized Configuration
 ```
 
 For example:
 
-``` text
+```text
 room-service.yml
 booking-service.yml
 notification-service.yml
@@ -1573,19 +1975,32 @@ api-gateway.yml
 
 This avoids hardcoding all configuration inside individual services.
 
-------------------------------------------------------------------------
+RabbitMQ configuration can also be centralized.
+
+For example:
+
+```yaml
+spring:
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+```
+
+Environment-specific secrets should not be committed directly into configuration files.
+
+---
 
 # Eureka
 
 Use:
 
-``` text
+```text
 Eureka Server
 ```
 
 Services register themselves as:
 
-``` text
+```text
 ROOM-SERVICE
 BOOKING-SERVICE
 NOTIFICATION-SERVICE
@@ -1594,31 +2009,35 @@ API-GATEWAY
 
 Booking Service should not need to know a fixed address such as:
 
-``` text
+```text
 http://localhost:8081
 ```
 
 It should use service discovery instead.
 
-------------------------------------------------------------------------
+RabbitMQ itself does not need Eureka discovery.
+
+Its connection information comes from configuration.
+
+---
 
 # API Gateway
 
 All external requests should enter through:
 
-``` text
+```text
 API Gateway
 ```
 
 not:
 
-``` text
+```text
 Client → Room Service directly
 ```
 
 Gateway responsibilities:
 
-``` text
+```text
 Routing
 Authentication
 Rate Limiting
@@ -1626,25 +2045,39 @@ Correlation ID
 Logging
 ```
 
-------------------------------------------------------------------------
+RabbitMQ does not go through the API Gateway.
+
+Internal asynchronous messaging remains:
+
+```text
+Booking Service
+      │
+      ▼
+RabbitMQ
+      │
+      ▼
+Notification Service
+```
+
+---
 
 # Correlation ID
 
 Add a gateway filter that creates:
 
-``` text
+```text
 X-Correlation-Id
 ```
 
 Example:
 
-``` text
+```text
 8f97a3a...
 ```
 
 The same identifier should follow the request through:
 
-``` text
+```text
 Gateway
    ↓
 Booking
@@ -1654,26 +2087,57 @@ Room
 
 It should also appear in:
 
-``` text
+```text
 Logs
 Tracing
 ```
 
-This is especially useful for observability.
+When Booking Service publishes a RabbitMQ event, the correlation ID can optionally be placed in:
 
-------------------------------------------------------------------------
+```text
+RabbitMQ Message Headers
+```
+
+For example:
+
+```text
+X-Correlation-Id
+```
+
+Flow:
+
+```text
+HTTP Request
+     │
+     ▼
+Gateway
+     │
+     ▼
+Booking Service
+     │
+     │ RabbitMQ Message Header
+     ▼
+RabbitMQ
+     │
+     ▼
+Notification Service
+```
+
+This makes it easier to connect synchronous request logs with asynchronous event processing.
+
+---
 
 # Docker
 
 Every Spring application should have a:
 
-``` text
+```text
 Dockerfile
 ```
 
 including:
 
-``` text
+```text
 room-service
 booking-service
 notification-service
@@ -1684,23 +2148,23 @@ discovery-server
 
 Each application should produce an independent Docker image.
 
-------------------------------------------------------------------------
+---
 
 # Docker Compose
 
 Create a complete local environment with:
 
-``` text
+```text
 docker-compose.yml
 ```
 
 It should run:
 
-``` text
+```text
 PostgreSQL Room DB
 PostgreSQL Booking DB
 Redis
-Kafka
+RabbitMQ
 Keycloak
 Config Server
 Eureka Server
@@ -1710,9 +2174,31 @@ Notification Service
 API Gateway
 ```
 
+Use the RabbitMQ management image during development so that the management UI is available.
+
+For example:
+
+```text
+RabbitMQ
+AMQP Port:       5672
+Management Port: 15672
+```
+
+The management interface allows you to inspect:
+
+```text
+Exchanges
+Queues
+Bindings
+Consumers
+Message Rates
+Acknowledgements
+Dead Letter Queues
+```
+
 Then add observability components:
 
-``` text
+```text
 Prometheus
 Loki
 Tempo
@@ -1721,13 +2207,17 @@ Grafana
 
 The goal is to start the entire local system with one command.
 
-------------------------------------------------------------------------
+```bash
+docker compose up -d
+```
+
+---
 
 # Observability
 
 Use:
 
-``` text
+```text
 Spring Boot Actuator
 Micrometer
 Prometheus
@@ -1744,7 +2234,7 @@ Prometheus collects them.
 
 Create one useful Grafana dashboard containing metrics such as:
 
-``` text
+```text
 Request Count
 Request Duration
 Error Rate
@@ -1753,13 +2243,29 @@ CPU
 HTTP Status Codes
 ```
 
-## Logging
+RabbitMQ can also provide messaging metrics such as:
+
+```text
+Queue Depth
+Published Messages
+Delivered Messages
+Acknowledged Messages
+Consumer Count
+Unacknowledged Messages
+Dead Letter Messages
+```
+
+These can be introduced when useful.
+
+---
+
+# Logging
 
 Use structured logs where practical.
 
 Include:
 
-``` text
+```text
 serviceName
 timestamp
 level
@@ -1768,19 +2274,30 @@ traceId
 message
 ```
 
+For RabbitMQ event consumers, useful additional fields include:
+
+```text
+eventId
+eventType
+bookingId
+routingKey
+```
+
 Loki collects the logs and Grafana displays them.
 
-## Distributed Tracing
+---
+
+# Distributed Tracing
 
 Use Tempo to trace a request such as:
 
-``` http
+```text
 POST /api/bookings
 ```
 
 across:
 
-``` text
+```text
 Gateway
    ↓
 Booking Service
@@ -1788,13 +2305,29 @@ Booking Service
 Room Service
 ```
 
-This allows you to inspect the complete distributed trace.
+This allows you to inspect the complete synchronous distributed trace.
 
-## Main Observability Scenario
+The messaging flow can additionally be correlated:
+
+```text
+Booking Service
+     │
+     ▼
+RabbitMQ Publish
+     │
+     ▼
+Notification Service
+```
+
+depending on the tracing instrumentation available.
+
+---
+
+# Main Observability Scenario
 
 Send a booking request, then use Grafana to inspect:
 
-``` text
+```text
 HTTP Request
        │
        ▼
@@ -1810,9 +2343,21 @@ Feign Call
 Room Span
 ```
 
+Then inspect the asynchronous side:
+
+```text
+Booking Event Published
+         │
+         ▼
+RabbitMQ
+         │
+         ▼
+Notification Consumed
+```
+
 Connect:
 
-``` text
+```text
 Metrics
 Logs
 Traces
@@ -1820,41 +2365,53 @@ Traces
 
 to understand the request end to end.
 
-------------------------------------------------------------------------
+---
 
 # Final Runtime Architecture
 
-``` text
+```text
                            Keycloak
                               │
                               │ JWT
                               ▼
 Client ───────────────────► API Gateway
                               │
-                      ┌───────┴─────────┐
-                      │                 │
-                      ▼                 ▼
-                 Room Service ◄──── Booking Service
+                       ┌──────┴──────────┐
+                       │                 │
+                       ▼                 ▼
+                  Room Service ◄──── Booking Service
                                         │
-                                        │ Kafka
+                                        │
+                                        │ RabbitMQ Publish
                                         ▼
-                              Notification Service
+                                booking.exchange
+                                        │
+                     ┌──────────────────┴────────────────┐
+                     │                                   │
+             booking.created                    booking.cancelled
+                     │                                   │
+                     └──────────────────┬────────────────┘
+                                        ▼
+                            notification.booking.queue
+                                        │
+                                        ▼
+                               Notification Service
 ```
 
 Infrastructure:
 
-``` text
+```text
 Config Server
 Eureka
 Redis
-Kafka
+RabbitMQ
 PostgreSQL
 Keycloak
 ```
 
 Observability:
 
-``` text
+```text
 Actuator
    │
    ▼
@@ -1873,7 +2430,7 @@ Tempo ───────────► Grafana
 
 Development pipeline:
 
-``` text
+```text
 Developer
    │
    ▼
@@ -1891,7 +2448,8 @@ GitHub Actions
    ├── Build
    ├── Unit Tests
    ├── Integration Tests
-   ├── Testcontainers
+   ├── PostgreSQL Testcontainers
+   ├── RabbitMQ Testcontainers
    ├── JaCoCo
    ├── Docker Build
    └── Trivy
@@ -1900,13 +2458,102 @@ GitHub Actions
 Merge
 ```
 
-------------------------------------------------------------------------
+---
+
+# RabbitMQ Failure Scenario
+
+A useful messaging scenario to demonstrate is a failed notification.
+
+```text
+Booking Service
+      │
+      ▼
+BookingCreatedEvent
+      │
+      ▼
+RabbitMQ
+      │
+      ▼
+Notification Service
+      │
+      X Processing Failure
+      │
+      ▼
+Retry
+      │
+      X
+      ▼
+Retry
+      │
+      X
+      ▼
+notification.booking.dlq
+```
+
+You can then inspect the message using RabbitMQ Management UI.
+
+This demonstrates:
+
+```text
+Reliable Messaging
+Acknowledgements
+Retries
+Dead Letter Queues
+Failure Handling
+```
+
+without adding another microservice.
+
+---
+
+# RabbitMQ Configuration Strategy
+
+Keep RabbitMQ topology simple.
+
+Use:
+
+```text
+1 Topic Exchange
+1 Notification Queue
+1 Dead Letter Queue
+2 Routing Keys
+```
+
+Specifically:
+
+```text
+Exchange:
+booking.exchange
+
+Queue:
+notification.booking.queue
+
+Dead Letter Queue:
+notification.booking.dlq
+
+Routing Keys:
+booking.created
+booking.cancelled
+```
+
+Do not create:
+
+```text
+❌ 10 exchanges
+❌ Separate exchange for every event
+❌ Dozens of queues
+❌ Complex routing topology
+```
+
+unless the business requirements eventually justify them.
+
+---
 
 # Rules to Prevent Overengineering
 
 Keep these constraints:
 
-``` text
+```text
 ❌ No Frontend initially
 ❌ No Payment
 ❌ No User Service
@@ -1915,14 +2562,15 @@ Keep these constraints:
 ❌ No 8+ Microservices
 ❌ No Full CRUD for every entity
 ❌ No Shared Database
-❌ No Kafka for every communication
+❌ No RabbitMQ for every communication
+❌ No complicated messaging topology
 ❌ No unnecessary DevOps tools before useful tests exist
 ❌ No complicated multi-environment setup
 ```
 
 In return, focus on:
 
-``` text
+```text
 ✅ 3 Business Services
 ✅ Database per Service
 ✅ REST APIs
@@ -1930,6 +2578,13 @@ In return, focus on:
 ✅ Validation
 ✅ Sync Communication
 ✅ Async Communication
+✅ RabbitMQ
+✅ Exchanges
+✅ Routing Keys
+✅ Queues
+✅ Message Consumers
+✅ Acknowledgements
+✅ Dead Letter Queue
 ✅ OAuth2 / OIDC
 ✅ JWT Security
 ✅ Resilience
@@ -1947,7 +2602,7 @@ In return, focus on:
 
 This is a strong scope for the project.
 
-------------------------------------------------------------------------
+---
 
 # Project Implementation Order
 
@@ -1955,11 +2610,13 @@ Do not introduce every technology at once.
 
 Build the project in layers.
 
-## Phase 1 --- Core Business
+---
+
+# Phase 1 — Core Business
 
 Start only with:
 
-``` text
+```text
 Room Service
 Booking Service
 PostgreSQL
@@ -1974,7 +2631,7 @@ OpenAPI
 
 Implement the business rules:
 
-``` text
+```text
 Time validation
 Max duration
 Active room
@@ -1984,7 +2641,7 @@ Ownership cancellation
 
 At the end of this phase, you should have:
 
-``` text
+```text
 Room Service
       +
 Booking Service
@@ -1994,15 +2651,15 @@ PostgreSQL
 
 working without complex microservices infrastructure.
 
-------------------------------------------------------------------------
+---
 
-## Phase 2 --- Testing
+# Phase 2 — Testing
 
 Before expanding the architecture, add solid testing.
 
 Use:
 
-``` text
+```text
 JUnit
 Mockito
 Spring Boot Integration Tests
@@ -2012,7 +2669,7 @@ WireMock
 
 Test:
 
-``` text
+```text
 Booking Rules
 Overlap Logic
 Room Availability
@@ -2023,19 +2680,19 @@ Feign scenarios
 
 Goal:
 
-``` text
+```bash
 ./mvnw clean verify
 ```
 
 must run locally without problems.
 
-------------------------------------------------------------------------
+---
 
-## Phase 3 --- Continuous Integration
+# Phase 3 — Continuous Integration
 
 Add:
 
-``` text
+```text
 GitHub
 GitHub Actions
 Pull Requests
@@ -2045,7 +2702,7 @@ JaCoCo
 
 Pipeline:
 
-``` text
+```text
 Push / Pull Request
        │
        ▼
@@ -2069,7 +2726,7 @@ Verify
 
 Do not allow:
 
-``` text
+```text
 merge
 ```
 
@@ -2077,17 +2734,17 @@ when CI fails.
 
 From this phase onward, whenever you add a technology, ask:
 
-``` text
+```text
 How will CI verify this?
 ```
 
-------------------------------------------------------------------------
+---
 
-## Phase 4 --- Spring Cloud
+# Phase 4 — Spring Cloud
 
 Add:
 
-``` text
+```text
 Config Server
 Eureka Server
 OpenFeign
@@ -2096,7 +2753,7 @@ API Gateway
 
 Architecture:
 
-``` text
+```text
 Client
   │
   ▼
@@ -2112,13 +2769,13 @@ Room
 
 Services use Eureka for discovery.
 
-------------------------------------------------------------------------
+---
 
-## Phase 5 --- Resilience + Rate Limiting
+# Phase 5 — Resilience + Rate Limiting
 
 Add:
 
-``` text
+```text
 Timeout
 Retry
 Circuit Breaker
@@ -2130,7 +2787,7 @@ Test failure scenarios manually.
 
 Example:
 
-``` text
+```text
 Stop Room Service
        │
        ▼
@@ -2140,13 +2797,13 @@ Call Booking API
 Observe Circuit Breaker
 ```
 
-------------------------------------------------------------------------
+---
 
-## Phase 6 --- Security
+# Phase 6 — Security
 
 Add:
 
-``` text
+```text
 Keycloak
 OAuth2
 OIDC
@@ -2156,7 +2813,7 @@ Spring Security
 
 Create:
 
-``` text
+```text
 ROLE_USER
 ROLE_ADMIN
 ```
@@ -2167,42 +2824,86 @@ Add security integration tests.
 
 CI should now also verify:
 
-``` text
+```text
 401 Unauthorized
 403 Forbidden
 USER permissions
 ADMIN permissions
 ```
 
-------------------------------------------------------------------------
+---
 
-## Phase 7 --- Kafka
+# Phase 7 — RabbitMQ Messaging
 
 Add:
 
-``` text
-Kafka
+```text
+RabbitMQ
+Spring AMQP
 BookingCreatedEvent
 BookingCancelledEvent
 Notification Service
 ```
 
-Add Kafka integration tests with Testcontainers.
+Configure:
+
+```text
+booking.exchange
+notification.booking.queue
+
+booking.created
+booking.cancelled
+```
+
+Architecture:
+
+```text
+Booking Service
+      │
+      ▼
+RabbitMQ Exchange
+      │
+      ▼
+Notification Queue
+      │
+      ▼
+Notification Service
+```
+
+Add RabbitMQ integration tests using:
+
+```text
+RabbitMQ Testcontainers
+```
 
 CI should verify:
 
-``` text
+```text
 Event Publishing
+Exchange Routing
+Queue Delivery
 Event Consumption
 ```
 
-------------------------------------------------------------------------
+Then add:
 
-## Phase 8 --- Docker
+```text
+Retry
+Acknowledgement
+Dead Letter Queue
+```
+
+and test one failure scenario.
+
+Do not overcomplicate the topology.
+
+---
+
+# Phase 8 — Docker
 
 Create a:
 
-``` text
+```text
 Dockerfile
 ```
 
@@ -2210,15 +2911,30 @@ for every service.
 
 Then create:
 
-``` text
+```text
 Docker Compose
 ```
 
 for the complete local system.
 
+Include:
+
+```text
+PostgreSQL
+Redis
+RabbitMQ
+Keycloak
+Config Server
+Eureka
+Room Service
+Booking Service
+Notification Service
+Gateway
+```
+
 Extend CI:
 
-``` text
+```text
 Tests
    ↓
 Docker Build
@@ -2226,17 +2942,17 @@ Docker Build
 
 If a Dockerfile is broken:
 
-``` text
+```text
 CI FAIL
 ```
 
-------------------------------------------------------------------------
+---
 
-## Phase 9 --- Security Scanning
+# Phase 9 — Security Scanning
 
 Add:
 
-``` text
+```text
 Trivy
 ```
 
@@ -2244,7 +2960,7 @@ after the Docker build.
 
 Pipeline:
 
-``` text
+```text
 Build
    ↓
 Test
@@ -2254,13 +2970,13 @@ Docker Image
 Trivy Scan
 ```
 
-------------------------------------------------------------------------
+---
 
-## Phase 10 --- Observability
+# Phase 10 — Observability
 
 Add:
 
-``` text
+```text
 Actuator
 Micrometer
 Prometheus
@@ -2273,7 +2989,7 @@ Build one useful dashboard instead of many unnecessary dashboards.
 
 Monitor:
 
-``` text
+```text
 Requests
 Latency
 Errors
@@ -2282,11 +2998,22 @@ Logs
 Distributed Traces
 ```
 
-------------------------------------------------------------------------
+Optionally add RabbitMQ metrics:
+
+```text
+Queue Depth
+Consumer Count
+Message Publish Rate
+Message Delivery Rate
+Unacknowledged Messages
+Dead Letter Messages
+```
+
+---
 
 # Final Short Roadmap
 
-``` text
+```text
 Phase 1
 Core Business
 Room + Booking + PostgreSQL
@@ -2297,7 +3024,7 @@ REST + JPA + Validation + OpenAPI
 Phase 2
 Testing
 JUnit + Mockito
-Testcontainers
+Testcontainers PostgreSQL
 WireMock
 
             ↓
@@ -2342,8 +3069,14 @@ Spring Security
 
 Phase 7
 Messaging
-Kafka
+RabbitMQ
+Spring AMQP
+Topic Exchange
+Routing Keys
+Queue
 Notification Service
+DLQ
+RabbitMQ Testcontainers
 
             ↓
 
@@ -2369,13 +3102,13 @@ Tempo
 Grafana
 ```
 
-------------------------------------------------------------------------
+---
 
 # Final Result
 
 At the end of the project, you will have built a system with:
 
-``` text
+```text
 3 Business Microservices
 API Gateway
 Service Discovery
@@ -2383,7 +3116,14 @@ Centralized Configuration
 Database per Service
 REST Communication
 Feign Communication
-Kafka Event-Driven Communication
+RabbitMQ Event-Driven Communication
+Spring AMQP
+Topic Exchange
+Routing Keys
+Durable Queue
+Message Acknowledgements
+Retries
+Dead Letter Queue
 OAuth2 / OIDC
 JWT Authentication
 Role-Based Authorization
@@ -2395,7 +3135,8 @@ Redis Rate Limiting
 Business Validation
 Unit Tests
 Integration Tests
-Testcontainers
+PostgreSQL Testcontainers
+RabbitMQ Testcontainers
 WireMock
 Continuous Integration
 Pull Request Checks
@@ -2409,35 +3150,146 @@ Docker
 Docker Compose
 ```
 
-The important point is that every technology has a natural use case in
-the project.
+The important point is that every technology has a natural use case in the project.
 
 You should be able to explain every major choice:
 
-``` text
+```text
 Why Feign?
+
 Because checking room availability needs an immediate response.
 
-Why Kafka?
-Because notification does not need to block booking creation.
+
+Why RabbitMQ?
+
+Because notification processing does not need to block booking creation.
+
+Booking Service can publish an event and continue without waiting for
+Notification Service to complete its work.
+
+
+Why a topic exchange?
+
+Because booking events have different types and routing keys while still
+belonging to the same booking messaging domain.
+
+
+Why routing keys?
+
+Because they allow messages such as booking.created and booking.cancelled
+to be routed according to their event type.
+
+
+Why a queue?
+
+Because Notification Service should be able to process events asynchronously,
+and messages can remain available while the consumer is temporarily offline.
+
+
+Why acknowledgements?
+
+Because RabbitMQ needs to know whether a consumer successfully processed
+a message.
+
+
+Why a Dead Letter Queue?
+
+Because messages that repeatedly fail should be isolated instead of being
+retried forever or silently lost.
+
 
 Why Circuit Breaker?
+
 Because Booking depends synchronously on Room.
 
+
 Why Redis?
+
 Because the Gateway needs distributed rate limiting.
 
+
 Why Keycloak?
+
 Because authentication is infrastructure, not the business domain.
 
+
 Why Testcontainers?
-Because integration tests should run against real infrastructure.
+
+Because integration tests should run against real infrastructure such as
+PostgreSQL and RabbitMQ.
+
 
 Why CI?
+
 Because every change should automatically prove that business rules,
-integration tests, packaging, and Docker images are still valid.
+integration tests, RabbitMQ messaging, packaging, and Docker images
+are still valid.
 ```
 
-That is what makes the project valuable after a Microservices course: it
-demonstrates intentional architecture and engineering decisions instead
-of being a collection of unrelated technologies.
+That is what makes the project valuable after a Microservices course: it demonstrates intentional architecture and engineering decisions instead of being a collection of unrelated technologies.
+
+The final communication model is:
+
+```text
+                     ┌─────────────────────┐
+                     │       Client        │
+                     └──────────┬──────────┘
+                                │
+                                ▼
+                     ┌─────────────────────┐
+                     │     API Gateway     │
+                     └──────────┬──────────┘
+                                │
+              ┌─────────────────┴──────────────────┐
+              │                                    │
+              ▼                                    ▼
+     ┌─────────────────┐                ┌────────────────────┐
+     │  Room Service   │◄──── Feign ────│  Booking Service   │
+     └─────────────────┘                └─────────┬──────────┘
+                                                  │
+                                                  │ Event
+                                                  ▼
+                                         ┌─────────────────┐
+                                         │    RabbitMQ     │
+                                         │                 │
+                                         │ booking.exchange│
+                                         └────────┬────────┘
+                                                  │
+                              ┌───────────────────┴──────────────────┐
+                              │                                      │
+                       booking.created                       booking.cancelled
+                              │                                      │
+                              └───────────────────┬──────────────────┘
+                                                  │
+                                                  ▼
+                                  ┌───────────────────────────┐
+                                  │ notification.booking.queue│
+                                  └─────────────┬─────────────┘
+                                                │
+                                                ▼
+                                   ┌────────────────────────┐
+                                   │ Notification Service   │
+                                   │                        │
+                                   │   @RabbitListener      │
+                                   └────────────────────────┘
+```
+
+This keeps RabbitMQ focused on the exact problem it solves well:
+
+```text
+Booking succeeds
+      │
+      ▼
+Save booking
+      │
+      ▼
+Publish event
+      │
+      ▼
+Return response to user
+      │
+      │
+      └──────── Notification processing happens asynchronously
+```
+
+The Booking Service therefore does not need to wait for Notification Service, while the Room availability check remains synchronous because its result is required before the booking can be created.

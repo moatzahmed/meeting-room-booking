@@ -4,32 +4,22 @@ import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
 
-import java.net.InetSocketAddress;
+import java.security.Principal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class RateLimitConfigurationTest {
-
-    private final KeyResolver keyResolver = new RateLimitConfiguration().clientIpKeyResolver();
-
-    @Test
-    void usesTheRemoteClientIpAsTheRateLimitKey() {
-        MockServerHttpRequest request = MockServerHttpRequest.post("/api/bookings")
-                .remoteAddress(new InetSocketAddress("192.0.2.10", 54321))
-                .build();
-
-        String key = keyResolver.resolve(MockServerWebExchange.from(request)).block();
-
-        assertThat(key).isEqualTo("192.0.2.10");
-    }
+    private final KeyResolver keyResolver = new RateLimitConfiguration().authenticatedUserKeyResolver();
 
     @Test
-    void usesAStableFallbackWhenTheRemoteAddressIsUnavailable() {
-        MockServerHttpRequest request = MockServerHttpRequest.post("/api/bookings").build();
+    void usesAuthenticatedSubjectAsRateLimitKey() {
+        ServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.post("/api/bookings").build());
+        exchange = exchange.mutate().principal(Mono.just((Principal) () -> "user-123")).build();
 
-        String key = keyResolver.resolve(MockServerWebExchange.from(request)).block();
-
-        assertThat(key).isEqualTo(RateLimitConfiguration.UNKNOWN_CLIENT);
+        assertThat(keyResolver.resolve(exchange).block()).isEqualTo("user-123");
     }
 }

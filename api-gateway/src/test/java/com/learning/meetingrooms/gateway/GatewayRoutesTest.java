@@ -5,6 +5,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cloud.gateway.route.RouteDefinitionLocator;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.Set;
 
@@ -23,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
                 "spring.cloud.gateway.server.webflux.routes[1].predicates[0]=Path=/api/bookings/**",
                 "spring.cloud.gateway.server.webflux.routes[1].predicates[1]=Method=POST",
                 "spring.cloud.gateway.server.webflux.routes[1].filters[0].name=RequestRateLimiter",
-                "spring.cloud.gateway.server.webflux.routes[1].filters[0].args[key-resolver]=#{@clientIpKeyResolver}",
+                "spring.cloud.gateway.server.webflux.routes[1].filters[0].args[key-resolver]=#{@authenticatedUserKeyResolver}",
                 "spring.cloud.gateway.server.webflux.routes[1].filters[0].args[redis-rate-limiter.replenishRate]=1",
                 "spring.cloud.gateway.server.webflux.routes[1].filters[0].args[redis-rate-limiter.burstCapacity]=60",
                 "spring.cloud.gateway.server.webflux.routes[1].filters[0].args[redis-rate-limiter.requestedTokens]=6",
@@ -37,6 +39,9 @@ class GatewayRoutesTest {
 
     @Autowired
     private RouteDefinitionLocator routeDefinitionLocator;
+
+    @MockitoBean
+    private ReactiveJwtDecoder jwtDecoder;
 
     @Test
     void loadsTheExplicitServiceRoutesIncludingTheRateLimitedBookingRoute() {

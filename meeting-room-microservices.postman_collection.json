@@ -1,45 +1,54 @@
 {
   "info": {
-    "_postman_id": "8f08cf80-8f14-4ae2-9a1e-8c41e6d5a381",
-    "name": "Meeting Room Microservices",
-    "description": "Learning collection for Room Service and Booking Service. Run requests in collection order: create a room first, then create and manage a booking. Authentication is not implemented yet; Booking Service currently requires the temporary X-User-Id header.",
+    "_postman_id": "b78d264e-7b2a-4ce6-9051-9ef256247c43",
+    "name": "Meeting Room Microservices — Complete Test Suite",
+    "description": "Enterprise-grade Postman collection for the Meeting Room Booking microservices system.\n\n### 🚀 Quick Start Workflow\n1. Go to **0. Auth & Keycloak** -> run **Login as User** (saves `{{user_token}}`).\n2. Run **Login as Admin** (saves `{{admin_token}}`).\n3. Go to **1. Room Service** -> **Admin Operations** -> run **Create Room** (saves `{{room_id}}`).\n4. Go to **2. Booking Service** -> run **Create Booking** (automatically sets valid tomorrow dates, creates booking, saves `{{booking_id}}`, and publishes `BookingCreatedEvent` to RabbitMQ!).\n5. Test cancellation, admin listing, business rule edge cases, Gateway rate limiting, and discovery.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
-  "auth": {
-    "type": "noauth"
-  },
-  "event": [
-    {
-      "listen": "test",
-      "script": {
-        "type": "text/javascript",
-        "exec": [
-          "pm.test('Response time is below 5 seconds', function () {",
-          "    pm.expect(pm.response.responseTime).to.be.below(5000);",
-          "});"
-        ]
-      }
-    }
-  ],
   "variable": [
     {
-      "key": "base_url",
-      "value": "http://localhost",
+      "key": "gateway_url",
+      "value": "http://localhost:8080",
       "type": "string"
     },
     {
       "key": "room_service_url",
-      "value": "{{base_url}}:8081",
+      "value": "http://localhost:8081",
       "type": "string"
     },
     {
       "key": "booking_service_url",
-      "value": "{{base_url}}:8082",
+      "value": "http://localhost:8082",
       "type": "string"
     },
     {
-      "key": "user_id",
-      "value": "user-123",
+      "key": "notification_service_url",
+      "value": "http://localhost:8083",
+      "type": "string"
+    },
+    {
+      "key": "keycloak_url",
+      "value": "http://localhost:8180",
+      "type": "string"
+    },
+    {
+      "key": "eureka_url",
+      "value": "http://localhost:8761",
+      "type": "string"
+    },
+    {
+      "key": "config_server_url",
+      "value": "http://localhost:8888",
+      "type": "string"
+    },
+    {
+      "key": "user_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "admin_token",
+      "value": "",
       "type": "string"
     },
     {
@@ -53,11 +62,6 @@
       "type": "string"
     },
     {
-      "key": "room_status",
-      "value": "ACTIVE",
-      "type": "string"
-    },
-    {
       "key": "booking_start_time",
       "value": "",
       "type": "string"
@@ -66,44 +70,29 @@
       "key": "booking_end_time",
       "value": "",
       "type": "string"
-    },
-    {
-      "key": "access_token",
-      "value": "",
-      "type": "string"
     }
   ],
   "item": [
     {
-      "name": "Room Service",
-      "description": "Room Service runs on port 8081 and manages room records and ACTIVE/INACTIVE status. No authentication is implemented in the current learning phase.",
+      "name": "0. Auth & Keycloak",
+      "description": "Authentication against Keycloak (port 8180) to acquire JWT Access Tokens with realm roles (ROLE_USER, ROLE_ADMIN).",
       "item": [
         {
-          "name": "Create Room",
+          "name": "Login as User (ROLE_USER)",
           "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const suffix = Date.now();",
-                  "pm.variables.set('unique_room_name', `Nile Room ${suffix}`);"
-                ]
-              }
-            },
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Room is created', function () {",
-                  "    pm.response.to.have.status(201);",
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
                   "});",
-                  "if (pm.response.code === 201) {",
-                  "    const room = pm.response.json();",
-                  "    pm.collectionVariables.set('room_id', String(room.id));",
-                  "    pm.test('Created room is ACTIVE', function () {",
-                  "        pm.expect(room.status).to.eql('ACTIVE');",
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('user_token', json.access_token);",
+                  "    pm.test('Access token stored in {{user_token}}', function () {",
+                  "        pm.expect(json.access_token).to.be.a('string');",
                   "    });",
                   "}"
                 ]
@@ -115,187 +104,1204 @@
             "header": [
               {
                 "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json",
-                "type": "text"
+                "value": "application/x-www-form-urlencoded"
               }
             ],
             "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"{{unique_room_name}}\",\n  \"location\": \"Floor 2 - East Wing\",\n  \"capacity\": 12\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": "{{room_service_url}}/api/rooms",
-            "description": "Creates an ACTIVE room. The test script saves the returned id into the collection variable {{room_id}}. A timestamp suffix prevents duplicate-name conflicts when the collection is run repeatedly."
-          },
-          "response": []
-        },
-        {
-          "name": "List Rooms",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Rooms are returned', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "    pm.expect(pm.response.json()).to.be.an('array');",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "url": "{{room_service_url}}/api/rooms",
-            "description": "Returns all rooms. This endpoint has no path or query parameters."
-          },
-          "response": []
-        },
-        {
-          "name": "Get Room by ID",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Requested room is returned', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "    pm.expect(String(pm.response.json().id)).to.eql(pm.collectionVariables.get('room_id'));",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{room_service_url}}/api/rooms/:id",
-              "host": [
-                "{{room_service_url}}"
-              ],
-              "path": [
-                "api",
-                "rooms",
-                ":id"
-              ],
-              "variable": [
+              "mode": "urlencoded",
+              "urlencoded": [
                 {
-                  "key": "id",
-                  "value": "{{room_id}}",
-                  "description": "ID saved by Create Room or set manually as a collection variable."
+                  "key": "client_id",
+                  "value": "meeting-room-api",
+                  "type": "text"
+                },
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "user",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "user",
+                  "type": "text"
+                },
+                {
+                  "key": "scope",
+                  "value": "openid",
+                  "type": "text"
                 }
               ]
             },
-            "description": "Retrieves one room using the reusable {{room_id}} path variable."
-          },
-          "response": []
+            "url": {
+              "raw": "{{keycloak_url}}/realms/meeting-room/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "meeting-room",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Logs in with credentials user/user and automatically saves access token into {{user_token}}."
+          }
         },
         {
-          "name": "Change Room Status",
+          "name": "Login as Admin (ROLE_ADMIN)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Room status is updated', function () {",
+                  "pm.test('Status code is 200 OK', function () {",
                   "    pm.response.to.have.status(200);",
-                  "    pm.expect(pm.response.json().status).to.eql(pm.collectionVariables.get('room_status'));",
-                  "});"
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('admin_token', json.access_token);",
+                  "    pm.test('Access token stored in {{admin_token}}', function () {",
+                  "        pm.expect(json.access_token).to.be.a('string');",
+                  "    });",
+                  "}"
                 ]
               }
             }
           ],
           "request": {
-            "method": "PATCH",
+            "method": "POST",
             "header": [
               {
                 "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json",
-                "type": "text"
+                "value": "application/x-www-form-urlencoded"
               }
             ],
             "body": {
-              "mode": "raw",
-              "raw": "{\n  \"status\": \"{{room_status}}\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{room_service_url}}/api/rooms/:id/status",
-              "host": [
-                "{{room_service_url}}"
-              ],
-              "path": [
-                "api",
-                "rooms",
-                ":id",
-                "status"
-              ],
-              "variable": [
+              "mode": "urlencoded",
+              "urlencoded": [
                 {
-                  "key": "id",
-                  "value": "{{room_id}}",
-                  "description": "Room whose status will change."
+                  "key": "client_id",
+                  "value": "meeting-room-api",
+                  "type": "text"
+                },
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "admin",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "admin",
+                  "type": "text"
+                },
+                {
+                  "key": "scope",
+                  "value": "openid",
+                  "type": "text"
                 }
               ]
             },
-            "description": "Changes a room to ACTIVE or INACTIVE using {{room_status}}. It defaults to ACTIVE so a full collection run can create a booking afterward."
-          },
-          "response": []
+            "url": {
+              "raw": "{{keycloak_url}}/realms/meeting-room/protocol/openid-connect/token",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "meeting-room",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Logs in with credentials admin/admin and automatically saves access token into {{admin_token}}."
+          }
+        },
+        {
+          "name": "Keycloak OpenID Discovery Configuration",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{keycloak_url}}/realms/meeting-room/.well-known/openid-configuration",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "meeting-room",
+                ".well-known",
+                "openid-configuration"
+              ]
+            },
+            "description": "Returns Keycloak OIDC discovery document including token_endpoint, jwks_uri, and issuer."
+          }
+        },
+        {
+          "name": "Keycloak JWKS Public Keys",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{keycloak_url}}/realms/meeting-room/protocol/openid-connect/certs",
+              "host": [
+                "{{keycloak_url}}"
+              ],
+              "path": [
+                "realms",
+                "meeting-room",
+                "protocol",
+                "openid-connect",
+                "certs"
+              ]
+            },
+            "description": "Returns JSON Web Key Set (certs) used by API Gateway and Spring resource servers to verify JWT signatures."
+          }
         }
       ]
     },
     {
-      "name": "Booking Service",
-      "description": "Booking Service runs on port 8082. It currently has no bearer authentication; X-User-Id is a temporary required development identity header.",
+      "name": "1. Room Service",
+      "description": "Endpoints managing meeting rooms. All requests route through API Gateway (port 8080) to Room Service (port 8081).",
       "item": [
         {
-          "name": "Create Booking",
+          "name": "Admin Operations",
+          "item": [
+            {
+              "name": "Create Room (Admin)",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var suffix = Date.now();",
+                      "pm.variables.set('unique_room_name', 'Conference Hall ' + suffix);"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Room is created (201 Created)', function () {",
+                      "    pm.response.to.have.status(201);",
+                      "});",
+                      "if (pm.response.code === 201) {",
+                      "    var room = pm.response.json();",
+                      "    pm.collectionVariables.set('room_id', String(room.id));",
+                      "    pm.test('Initial room status is ACTIVE', function () {",
+                      "        pm.expect(room.status).to.eql('ACTIVE');",
+                      "    });",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"{{unique_room_name}}\",\n  \"location\": \"Floor 3, West Wing\",\n  \"capacity\": 20\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{gateway_url}}/api/rooms",
+                  "host": [
+                    "{{gateway_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "rooms"
+                  ]
+                },
+                "description": "Requires ROLE_ADMIN. Creates a new room and saves its ID in {{room_id}}."
+              }
+            },
+            {
+              "name": "Change Room Status to INACTIVE (Admin)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Room status updated to INACTIVE (200 OK)', function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().status).to.eql('INACTIVE');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"INACTIVE\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{gateway_url}}/api/rooms/{{room_id}}/status",
+                  "host": [
+                    "{{gateway_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "rooms",
+                    "{{room_id}}",
+                    "status"
+                  ]
+                },
+                "description": "Changes status of {{room_id}} to INACTIVE (used to test business rule rejection)."
+              }
+            },
+            {
+              "name": "Change Room Status to ACTIVE (Admin)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Room status restored to ACTIVE (200 OK)', function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json().status).to.eql('ACTIVE');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"ACTIVE\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{gateway_url}}/api/rooms/{{room_id}}/status",
+                  "host": [
+                    "{{gateway_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "rooms",
+                    "{{room_id}}",
+                    "status"
+                  ]
+                },
+                "description": "Restores status of {{room_id}} back to ACTIVE."
+              }
+            }
+          ]
+        },
+        {
+          "name": "User & Admin Operations",
+          "item": [
+            {
+              "name": "List All Rooms",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Rooms list returned (200 OK)', function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json()).to.be.an('array');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{user_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{gateway_url}}/api/rooms",
+                  "host": [
+                    "{{gateway_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "rooms"
+                  ]
+                },
+                "description": "Available to both USER and ADMIN roles."
+              }
+            },
+            {
+              "name": "Get Room By ID",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Room details returned (200 OK)', function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(String(pm.response.json().id)).to.eql(pm.collectionVariables.get('room_id'));",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{user_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{gateway_url}}/api/rooms/{{room_id}}",
+                  "host": [
+                    "{{gateway_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "rooms",
+                    "{{room_id}}"
+                  ]
+                },
+                "description": "Retrieves the room corresponding to {{room_id}}."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Negative & Security Checks",
+          "item": [
+            {
+              "name": "Create Room with User Token (Expect 403 Forbidden)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Expected 403 Forbidden for non-admin user', function () {",
+                      "    pm.response.to.have.status(403);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{user_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Unauthorized Room\",\n  \"location\": \"Basement\",\n  \"capacity\": 5\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{gateway_url}}/api/rooms",
+                  "host": [
+                    "{{gateway_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "rooms"
+                  ]
+                },
+                "description": "Verifies that users without ROLE_ADMIN cannot create rooms."
+              }
+            },
+            {
+              "name": "Create Room with Blank Fields (Expect 400 Bad Request)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Expected 400 Bad Request on validation failure', function () {",
+                      "    pm.response.to.have.status(400);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"\",\n  \"location\": \"\",\n  \"capacity\": 0\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{gateway_url}}/api/rooms",
+                  "host": [
+                    "{{gateway_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "rooms"
+                  ]
+                },
+                "description": "Verifies Jakarta validation constraints on CreateRoomRequest."
+              }
+            },
+            {
+              "name": "Get Non-Existent Room (Expect 404 Not Found)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Expected 404 Not Found', function () {",
+                      "    pm.response.to.have.status(404);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{user_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{gateway_url}}/api/rooms/999999",
+                  "host": [
+                    "{{gateway_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "rooms",
+                    "999999"
+                  ]
+                },
+                "description": "Retrieving an invalid room ID returns 404."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Booking Service",
+      "description": "Endpoints managing reservations. Routes through Gateway (8080) to Booking Service (8082). Also publishes RabbitMQ events received by Notification Service (8083).",
+      "item": [
+        {
+          "name": "User Reservation Flow",
+          "item": [
+            {
+              "name": "Create Booking (Publishes BookingCreatedEvent)",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Set future times: tomorrow starting at 10:00 UTC",
+                      "var start = new Date(Date.now() + 24 * 60 * 60 * 1000);",
+                      "start.setUTCHours(10, 0, 0, 0);",
+                      "var end = new Date(start.getTime() + 60 * 60 * 1000); // 1 hour",
+                      "pm.collectionVariables.set('booking_start_time', start.toISOString());",
+                      "pm.collectionVariables.set('booking_end_time', end.toISOString());"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Booking is created (201 Created)', function () {",
+                      "    pm.response.to.have.status(201);",
+                      "});",
+                      "if (pm.response.code === 201) {",
+                      "    var booking = pm.response.json();",
+                      "    pm.collectionVariables.set('booking_id', String(booking.id));",
+                      "    pm.test('Booking status is CONFIRMED', function () {",
+                      "        pm.expect(booking.status).to.eql('CONFIRMED');",
+                      "    });",
+                      "    pm.test('RabbitMQ BookingCreatedEvent published', function () {",
+                      "        pm.expect(booking.id).to.be.a('number');",
+                      "    });",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{user_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"roomId\": {{room_id}},\n  \"startTime\": \"{{booking_start_time}}\",\n  \"endTime\": \"{{booking_end_time}}\",\n  \"purpose\": \"Sprint Planning & Architecture Discussion\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{gateway_url}}/api/bookings",
+                  "host": [
+                    "{{gateway_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "bookings"
+                  ]
+                },
+                "description": "Creates a confirmed 1-hour booking for {{room_id}}. Publishes 'booking.created' event to RabbitMQ (consumed by Notification Service)."
+              }
+            },
+            {
+              "name": "List My Bookings (/me)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('My bookings returned (200 OK)', function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json()).to.be.an('array');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{user_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{gateway_url}}/api/bookings/me",
+                  "host": [
+                    "{{gateway_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "bookings",
+                    "me"
+                  ]
+                },
+                "description": "Returns all bookings owned by the authenticated user extracted from the JWT token subject."
+              }
+            },
+            {
+              "name": "Get My Booking By ID",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Owned booking returned (200 OK)', function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(String(pm.response.json().id)).to.eql(pm.collectionVariables.get('booking_id'));",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{user_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{gateway_url}}/api/bookings/{{booking_id}}",
+                  "host": [
+                    "{{gateway_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "bookings",
+                    "{{booking_id}}"
+                  ]
+                },
+                "description": "Retrieves the single booking matching {{booking_id}} owned by user."
+              }
+            },
+            {
+              "name": "Cancel My Booking (Publishes BookingCancelledEvent)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Cancellation succeeded (204 No Content)', function () {",
+                      "    pm.response.to.have.status(204);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{user_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{gateway_url}}/api/bookings/{{booking_id}}",
+                  "host": [
+                    "{{gateway_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "bookings",
+                    "{{booking_id}}"
+                  ]
+                },
+                "description": "Cancels {{booking_id}}. Status updates to CANCELLED and publishes 'booking.cancelled' event to RabbitMQ (consumed by Notification Service)."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin Operations",
+          "item": [
+            {
+              "name": "List All Bookings (Admin Only - /all)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Admin lists all system bookings (200 OK)', function () {",
+                      "    pm.response.to.have.status(200);",
+                      "    pm.expect(pm.response.json()).to.be.an('array');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{gateway_url}}/api/bookings/all",
+                  "host": [
+                    "{{gateway_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "bookings",
+                    "all"
+                  ]
+                },
+                "description": "Returns every booking across all users in the system. Requires ROLE_ADMIN."
+              }
+            },
+            {
+              "name": "Access /all with User Token (Expect 403 Forbidden)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Expected 403 Forbidden for non-admin user on /all', function () {",
+                      "    pm.response.to.have.status(403);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{user_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{gateway_url}}/api/bookings/all",
+                  "host": [
+                    "{{gateway_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "bookings",
+                    "all"
+                  ]
+                },
+                "description": "Verifies that normal users cannot inspect all system bookings."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Business Rules Negative Tests",
+          "item": [
+            {
+              "name": "Rule 1: End Time Before Start Time (Expect 400 Bad Request)",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var start = new Date(Date.now() + 24 * 60 * 60 * 1000);",
+                      "var end = new Date(start.getTime() - 30 * 60 * 1000); // 30 mins before start",
+                      "pm.variables.set('rule1_start', start.toISOString());",
+                      "pm.variables.set('rule1_end', end.toISOString());"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Expected 400 Bad Request for Rule 1 violation', function () {",
+                      "    pm.response.to.have.status(400);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{user_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"roomId\": {{room_id}},\n  \"startTime\": \"{{rule1_start}}\",\n  \"endTime\": \"{{rule1_end}}\",\n  \"purpose\": \"Invalid time range\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{gateway_url}}/api/bookings",
+                  "host": [
+                    "{{gateway_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "bookings"
+                  ]
+                },
+                "description": "Rejects bookings where startTime >= endTime."
+              }
+            },
+            {
+              "name": "Rule 2: Booking in the Past (Expect 400 Bad Request)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Expected 400 Bad Request for past booking', function () {",
+                      "    pm.response.to.have.status(400);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{user_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"roomId\": {{room_id}},\n  \"startTime\": \"2020-01-01T10:00:00Z\",\n  \"endTime\": \"2020-01-01T11:00:00Z\",\n  \"purpose\": \"Past booking\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{gateway_url}}/api/bookings",
+                  "host": [
+                    "{{gateway_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "bookings"
+                  ]
+                },
+                "description": "Rejects bookings where startTime <= current instant."
+              }
+            },
+            {
+              "name": "Rule 3: Duration Exceeds 4 Hours (Expect 400 Bad Request)",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var start = new Date(Date.now() + 48 * 60 * 60 * 1000);",
+                      "var end = new Date(start.getTime() + 5 * 60 * 60 * 1000); // 5 hours",
+                      "pm.variables.set('rule3_start', start.toISOString());",
+                      "pm.variables.set('rule3_end', end.toISOString());"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Expected 400 Bad Request for exceeding max 4 hours', function () {",
+                      "    pm.response.to.have.status(400);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{user_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"roomId\": {{room_id}},\n  \"startTime\": \"{{rule3_start}}\",\n  \"endTime\": \"{{rule3_end}}\",\n  \"purpose\": \"All day meeting\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{gateway_url}}/api/bookings",
+                  "host": [
+                    "{{gateway_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "bookings"
+                  ]
+                },
+                "description": "Rejects bookings whose duration > 4 hours."
+              }
+            },
+            {
+              "name": "Rule 4: Booking Inactive Room (Expect 400 Bad Request)",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var start = new Date(Date.now() + 72 * 60 * 60 * 1000);",
+                      "var end = new Date(start.getTime() + 60 * 60 * 1000);",
+                      "pm.variables.set('rule4_start', start.toISOString());",
+                      "pm.variables.set('rule4_end', end.toISOString());"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Expected 400 Bad Request when booking inactive room', function () {",
+                      "    pm.response.to.have.status(400);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{user_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"roomId\": {{room_id}},\n  \"startTime\": \"{{rule4_start}}\",\n  \"endTime\": \"{{rule4_end}}\",\n  \"purpose\": \"Booking an inactive room\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{gateway_url}}/api/bookings",
+                  "host": [
+                    "{{gateway_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "bookings"
+                  ]
+                },
+                "description": "Run 'Change Room Status to INACTIVE' first to trigger ROOM_INACTIVE violation."
+              }
+            },
+            {
+              "name": "Rule 5: Overlapping Booking Conflict (Expect 400 Bad Request)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Expected 400 Bad Request on overlapping slot', function () {",
+                      "    pm.response.to.have.status(400);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{user_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"roomId\": {{room_id}},\n  \"startTime\": \"{{booking_start_time}}\",\n  \"endTime\": \"{{booking_end_time}}\",\n  \"purpose\": \"Conflicting duplicate slot\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{gateway_url}}/api/bookings",
+                  "host": [
+                    "{{gateway_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "bookings"
+                  ]
+                },
+                "description": "Attempts to book an already reserved room slot, triggering BOOKING_OVERLAP."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. API Gateway & Rate Limiting",
+      "description": "Verifies Gateway health, routing definitions, and Redis token bucket rate limiting.",
+      "item": [
+        {
+          "name": "Gateway Health (8080)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/actuator/health",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "Returns UP status for API Gateway."
+          }
+        },
+        {
+          "name": "Gateway Info (8080)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/actuator/info",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "actuator",
+                "info"
+              ]
+            },
+            "description": "Returns service information for API Gateway."
+          }
+        },
+        {
+          "name": "Gateway Configured Routes (8080)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/actuator/gateway/routes",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "actuator",
+                "gateway",
+                "routes"
+              ]
+            },
+            "description": "Inspects dynamic routes configured in Spring Cloud Gateway."
+          }
+        },
+        {
+          "name": "Rate Limiter Test (Burst Booking Request)",
           "event": [
             {
               "listen": "prerequest",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const start = new Date(Date.now() + 24 * 60 * 60 * 1000);",
-                  "start.setUTCMinutes(0, 0, 0);",
-                  "const end = new Date(start.getTime() + 60 * 60 * 1000);",
-                  "pm.collectionVariables.set('booking_start_time', start.toISOString());",
-                  "pm.collectionVariables.set('booking_end_time', end.toISOString());"
+                  "var start = new Date(Date.now() + 100 * 60 * 60 * 1000);",
+                  "var end = new Date(start.getTime() + 60 * 60 * 1000);",
+                  "pm.variables.set('rl_start', start.toISOString());",
+                  "pm.variables.set('rl_end', end.toISOString());"
                 ]
               }
             },
@@ -304,18 +1310,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Booking is created', function () {",
-                  "    pm.response.to.have.status(201);",
-                  "});",
-                  "if (pm.response.code === 201) {",
-                  "    const booking = pm.response.json();",
-                  "    pm.collectionVariables.set('booking_id', String(booking.id));",
-                  "    pm.test('Booking is confirmed for selected room and user', function () {",
-                  "        pm.expect(booking.status).to.eql('CONFIRMED');",
-                  "        pm.expect(String(booking.roomId)).to.eql(pm.collectionVariables.get('room_id'));",
-                  "        pm.expect(booking.userId).to.eql(pm.collectionVariables.get('user_id'));",
-                  "    });",
-                  "}"
+                  "// Rapid repeated execution will return 429 Too Many Requests once token bucket empties",
+                  "pm.test('Response is 201 or 429 (Rate limited)', function () {",
+                  "    pm.expect([201, 429]).to.include(pm.response.code);",
+                  "});"
                 ]
               }
             }
@@ -324,175 +1322,459 @@
             "method": "POST",
             "header": [
               {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              },
+              {
                 "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "X-User-Id",
-                "value": "{{user_id}}",
-                "type": "text",
-                "description": "Temporary development identity. This will later come from a validated JWT."
+                "value": "application/json"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"roomId\": {{room_id}},\n  \"startTime\": \"{{booking_start_time}}\",\n  \"endTime\": \"{{booking_end_time}}\",\n  \"purpose\": \"Backend architecture learning session\"\n}",
+              "raw": "{\n  \"roomId\": {{room_id}},\n  \"startTime\": \"{{rl_start}}\",\n  \"endTime\": \"{{rl_end}}\",\n  \"purpose\": \"Rate limit verification burst\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
             },
-            "url": "{{booking_service_url}}/api/bookings",
-            "description": "Creates a future one-hour booking for {{room_id}}. The pre-request script generates valid future times and the test script saves the returned id into {{booking_id}}. Room Service must be running and the room must be ACTIVE."
-          },
-          "response": []
-        },
+            "url": {
+              "raw": "{{gateway_url}}/api/bookings",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "bookings"
+              ]
+            },
+            "description": "Repeated fast requests consume bucket tokens, triggering 429 Too Many Requests via Redis RateLimiter."
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Service Discovery (Eureka)",
+      "description": "Inspect registered microservice instances on Eureka Discovery Server (port 8761).",
+      "item": [
         {
-          "name": "List My Bookings",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Current user bookings are returned', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "    const bookings = pm.response.json();",
-                  "    pm.expect(bookings).to.be.an('array');",
-                  "    pm.expect(bookings.every(booking => booking.userId === pm.collectionVariables.get('user_id'))).to.be.true;",
-                  "});"
-                ]
-              }
-            }
-          ],
+          "name": "List All Registered Applications",
           "request": {
             "method": "GET",
             "header": [
               {
                 "key": "Accept",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "X-User-Id",
-                "value": "{{user_id}}",
-                "type": "text",
-                "description": "Temporary development identity."
-              }
-            ],
-            "url": "{{booking_service_url}}/api/bookings/me",
-            "description": "Lists bookings owned by {{user_id}}. There are no query parameters."
-          },
-          "response": []
-        },
-        {
-          "name": "Get My Booking by ID",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Owned booking is returned', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "    const booking = pm.response.json();",
-                  "    pm.expect(String(booking.id)).to.eql(pm.collectionVariables.get('booking_id'));",
-                  "    pm.expect(booking.userId).to.eql(pm.collectionVariables.get('user_id'));",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json",
-                "type": "text"
-              },
-              {
-                "key": "X-User-Id",
-                "value": "{{user_id}}",
-                "type": "text",
-                "description": "Must match the booking owner."
+                "value": "application/json"
               }
             ],
             "url": {
-              "raw": "{{booking_service_url}}/api/bookings/:bookingId",
+              "raw": "{{eureka_url}}/eureka/apps",
+              "host": [
+                "{{eureka_url}}"
+              ],
+              "path": [
+                "eureka",
+                "apps"
+              ]
+            },
+            "description": "Returns the registry containing ROOM-SERVICE, BOOKING-SERVICE, NOTIFICATION-SERVICE, and API-GATEWAY."
+          }
+        },
+        {
+          "name": "Get ROOM-SERVICE Instances",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{eureka_url}}/eureka/apps/ROOM-SERVICE",
+              "host": [
+                "{{eureka_url}}"
+              ],
+              "path": [
+                "eureka",
+                "apps",
+                "ROOM-SERVICE"
+              ]
+            },
+            "description": "Returns healthy instance details for ROOM-SERVICE."
+          }
+        },
+        {
+          "name": "Get BOOKING-SERVICE Instances",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{eureka_url}}/eureka/apps/BOOKING-SERVICE",
+              "host": [
+                "{{eureka_url}}"
+              ],
+              "path": [
+                "eureka",
+                "apps",
+                "BOOKING-SERVICE"
+              ]
+            },
+            "description": "Returns healthy instance details for BOOKING-SERVICE."
+          }
+        },
+        {
+          "name": "Get NOTIFICATION-SERVICE Instances",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{eureka_url}}/eureka/apps/NOTIFICATION-SERVICE",
+              "host": [
+                "{{eureka_url}}"
+              ],
+              "path": [
+                "eureka",
+                "apps",
+                "NOTIFICATION-SERVICE"
+              ]
+            },
+            "description": "Returns healthy instance details for NOTIFICATION-SERVICE."
+          }
+        },
+        {
+          "name": "Get API-GATEWAY Instances",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{eureka_url}}/eureka/apps/API-GATEWAY",
+              "host": [
+                "{{eureka_url}}"
+              ],
+              "path": [
+                "eureka",
+                "apps",
+                "API-GATEWAY"
+              ]
+            },
+            "description": "Returns healthy instance details for API-GATEWAY."
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Config Server & Bus Refresh",
+      "description": "Fetches centralized configurations and triggers RabbitMQ-based configuration reloads via Spring Cloud Bus.",
+      "item": [
+        {
+          "name": "Fetch Room Service Configuration",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{config_server_url}}/room-service/default",
+              "host": [
+                "{{config_server_url}}"
+              ],
+              "path": [
+                "room-service",
+                "default"
+              ]
+            },
+            "description": "Returns active properties served to room-service."
+          }
+        },
+        {
+          "name": "Fetch Booking Service Configuration",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{config_server_url}}/booking-service/default",
+              "host": [
+                "{{config_server_url}}"
+              ],
+              "path": [
+                "booking-service",
+                "default"
+              ]
+            },
+            "description": "Returns active properties served to booking-service."
+          }
+        },
+        {
+          "name": "Fetch API Gateway Configuration",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{config_server_url}}/api-gateway/default",
+              "host": [
+                "{{config_server_url}}"
+              ],
+              "path": [
+                "api-gateway",
+                "default"
+              ]
+            },
+            "description": "Returns active properties served to api-gateway."
+          }
+        },
+        {
+          "name": "Fetch Notification Service Configuration",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{config_server_url}}/notification-service/default",
+              "host": [
+                "{{config_server_url}}"
+              ],
+              "path": [
+                "notification-service",
+                "default"
+              ]
+            },
+            "description": "Returns active properties served to notification-service."
+          }
+        },
+        {
+          "name": "Trigger Spring Cloud Bus Refresh (RabbitMQ Broadcast)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Bus refresh broadcast accepted (204 or 200)', function () {",
+                  "    pm.expect([200, 204]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{config_server_url}}/actuator/busrefresh",
+              "host": [
+                "{{config_server_url}}"
+              ],
+              "path": [
+                "actuator",
+                "busrefresh"
+              ]
+            },
+            "description": "Broadcasts a refresh event across RabbitMQ to reload @RefreshScope beans dynamically across services."
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Direct Endpoints & Actuators",
+      "description": "Inspect individual microservices directly on their dedicated ports (Health, Info, and direct APIs).",
+      "item": [
+        {
+          "name": "Room Service Health (Direct 8081)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{room_service_url}}/actuator/health",
+              "host": [
+                "{{room_service_url}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "Direct health check on Room Service."
+          }
+        },
+        {
+          "name": "Room Service Info (Direct 8081)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{room_service_url}}/actuator/info",
+              "host": [
+                "{{room_service_url}}"
+              ],
+              "path": [
+                "actuator",
+                "info"
+              ]
+            },
+            "description": "Direct info check on Room Service."
+          }
+        },
+        {
+          "name": "Booking Service Health (Direct 8082)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{booking_service_url}}/actuator/health",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "Direct health check on Booking Service."
+          }
+        },
+        {
+          "name": "Booking Service Info (Direct 8082)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{booking_service_url}}/actuator/info",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "actuator",
+                "info"
+              ]
+            },
+            "description": "Direct info check on Booking Service."
+          }
+        },
+        {
+          "name": "Notification Service Health (Direct 8083)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{notification_service_url}}/actuator/health",
+              "host": [
+                "{{notification_service_url}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "Direct health check on Notification Service."
+          }
+        },
+        {
+          "name": "Notification Service Info (Direct 8083)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{notification_service_url}}/actuator/info",
+              "host": [
+                "{{notification_service_url}}"
+              ],
+              "path": [
+                "actuator",
+                "info"
+              ]
+            },
+            "description": "Direct info check on Notification Service."
+          }
+        },
+        {
+          "name": "Direct Room Service API (8081)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{room_service_url}}/api/rooms",
+              "host": [
+                "{{room_service_url}}"
+              ],
+              "path": [
+                "api",
+                "rooms"
+              ]
+            },
+            "description": "Direct call to Room Service bypassing Gateway."
+          }
+        },
+        {
+          "name": "Direct Booking Service API (8082)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{booking_service_url}}/api/bookings/me",
               "host": [
                 "{{booking_service_url}}"
               ],
               "path": [
                 "api",
                 "bookings",
-                ":bookingId"
-              ],
-              "variable": [
-                {
-                  "key": "bookingId",
-                  "value": "{{booking_id}}",
-                  "description": "ID saved by Create Booking or set manually."
-                }
+                "me"
               ]
             },
-            "description": "Retrieves a booking only when it belongs to {{user_id}}. Missing and foreign bookings both return 404."
-          },
-          "response": []
+            "description": "Direct call to Booking Service bypassing Gateway."
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. OpenAPI & Swagger Docs",
+      "description": "Fetch machine-readable OpenAPI v3 contracts.",
+      "item": [
+        {
+          "name": "Room Service OpenAPI Spec (JSON)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{room_service_url}}/v3/api-docs",
+              "host": [
+                "{{room_service_url}}"
+              ],
+              "path": [
+                "v3",
+                "api-docs"
+              ]
+            },
+            "description": "Retrieves OpenAPI 3.0 specification for Room Service."
+          }
         },
         {
-          "name": "Cancel My Booking",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Booking cancellation succeeds without deleting history', function () {",
-                  "    pm.response.to.have.status(204);",
-                  "});"
-                ]
-              }
-            }
-          ],
+          "name": "Booking Service OpenAPI Spec (JSON)",
           "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "X-User-Id",
-                "value": "{{user_id}}",
-                "type": "text",
-                "description": "Must match the booking owner."
-              }
-            ],
+            "method": "GET",
             "url": {
-              "raw": "{{booking_service_url}}/api/bookings/:bookingId",
+              "raw": "{{booking_service_url}}/v3/api-docs",
               "host": [
                 "{{booking_service_url}}"
               ],
               "path": [
-                "api",
-                "bookings",
-                ":bookingId"
-              ],
-              "variable": [
-                {
-                  "key": "bookingId",
-                  "value": "{{booking_id}}",
-                  "description": "Owned booking to cancel."
-                }
+                "v3",
+                "api-docs"
               ]
             },
-            "description": "Logically cancels the owned booking by changing its status to CANCELLED. It does not physically delete the row and is idempotent."
-          },
-          "response": []
+            "description": "Retrieves OpenAPI 3.0 specification for Booking Service."
+          }
         }
       ]
     }

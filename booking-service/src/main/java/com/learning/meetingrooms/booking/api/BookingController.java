@@ -5,17 +5,11 @@ import com.learning.meetingrooms.booking.application.CreateBookingCommand;
 import com.learning.meetingrooms.booking.domain.Booking;
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
 import java.util.List;
@@ -24,7 +18,6 @@ import java.util.List;
 @RequestMapping("/api/bookings")
 @Tag(name = "Bookings", description = "User-owned meeting-room reservations")
 public class BookingController {
-
     private final BookingService bookingService;
 
     public BookingController(BookingService bookingService) {
@@ -33,59 +26,37 @@ public class BookingController {
 
     @PostMapping
     @Operation(summary = "Create a confirmed booking")
-    ResponseEntity<BookingResponse> create(
-            @Parameter(description = "Temporary development identity; replaced by JWT later", required = true)
-            @RequestHeader("X-User-Id") String userId,
-            @Valid @RequestBody CreateBookingRequest request
-    ) {
-        String normalizedUserId = normalizeUserId(userId);
+    ResponseEntity<BookingResponse> create(@AuthenticationPrincipal Jwt jwt,
+                                           @Valid @RequestBody CreateBookingRequest request) {
         Booking booking = bookingService.create(new CreateBookingCommand(
-                request.roomId(), normalizedUserId, request.startTime(), request.endTime(), request.purpose()
+                request.roomId(), jwt.getSubject(), request.startTime(), request.endTime(), request.purpose()
         ));
-        return ResponseEntity
-                .created(URI.create("/api/bookings/" + booking.getId()))
+        return ResponseEntity.created(URI.create("/api/bookings/" + booking.getId()))
                 .body(BookingResponse.from(booking));
     }
 
     @GetMapping("/me")
     @Operation(summary = "List the current user's bookings")
-    List<BookingResponse> findMine(
-            @Parameter(description = "Temporary development identity; replaced by JWT later", required = true)
-            @RequestHeader("X-User-Id") String userId
-    ) {
-        return bookingService.findMine(normalizeUserId(userId)).stream()
-                .map(BookingResponse::from)
-                .toList();
+    List<BookingResponse> findMine(@AuthenticationPrincipal Jwt jwt) {
+        return bookingService.findMine(jwt.getSubject()).stream().map(BookingResponse::from).toList();
+    }
+
+    @GetMapping("/all")
+    @Operation(summary = "List every booking (administrators only)")
+    List<BookingResponse> findAll() {
+        return bookingService.findAll().stream().map(BookingResponse::from).toList();
     }
 
     @GetMapping("/{bookingId}")
     @Operation(summary = "Retrieve one booking owned by the current user")
-    BookingResponse findOwn(
-            @PathVariable Long bookingId,
-            @Parameter(description = "Temporary development identity; replaced by JWT later", required = true)
-            @RequestHeader("X-User-Id") String userId
-    ) {
-        return BookingResponse.from(bookingService.findOwn(bookingId, normalizeUserId(userId)));
+    BookingResponse findOwn(@PathVariable Long bookingId, @AuthenticationPrincipal Jwt jwt) {
+        return BookingResponse.from(bookingService.findOwn(bookingId, jwt.getSubject()));
     }
 
     @DeleteMapping("/{bookingId}")
     @Operation(summary = "Cancel a booking owned by the current user")
-    ResponseEntity<Void> cancelOwn(
-            @PathVariable Long bookingId,
-            @Parameter(description = "Temporary development identity; replaced by JWT later", required = true)
-            @RequestHeader("X-User-Id") String userId
-    ) {
-        bookingService.cancelOwn(bookingId, normalizeUserId(userId));
+    ResponseEntity<Void> cancelOwn(@PathVariable Long bookingId, @AuthenticationPrincipal Jwt jwt) {
+        bookingService.cancelOwn(bookingId, jwt.getSubject());
         return ResponseEntity.noContent().build();
-    }
-
-    private String normalizeUserId(String userId) {
-        String normalizedUserId = userId.trim();
-        if (normalizedUserId.isEmpty() || normalizedUserId.length() > 100) {
-            throw new InvalidDevelopmentIdentityException(
-                    "X-User-Id must contain between 1 and 100 non-whitespace characters"
-            );
-        }
-        return normalizedUserId;
     }
 }

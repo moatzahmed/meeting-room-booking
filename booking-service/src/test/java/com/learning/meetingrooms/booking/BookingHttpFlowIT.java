@@ -14,6 +14,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
@@ -41,6 +44,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers(disabledWithoutDocker = true)
@@ -79,6 +84,9 @@ class BookingHttpFlowIT {
     @Autowired
     private BookingRepository bookingRepository;
 
+    @MockitoBean
+    private JwtDecoder jwtDecoder;
+
     @Autowired
     private CircuitBreakerRegistry circuitBreakerRegistry;
 
@@ -92,6 +100,12 @@ class BookingHttpFlowIT {
 
     @BeforeEach
     void cleanDatabase() {
+        when(jwtDecoder.decode(anyString())).thenAnswer(invocation -> {
+            String subject = invocation.getArgument(0);
+            return Jwt.withTokenValue(subject).header("alg", "none").subject(subject)
+                    .claim("realm_access", java.util.Map.of("roles", java.util.List.of("ROLE_USER")))
+                    .build();
+        });
         bookingRepository.deleteAll();
         ROOM_REQUEST_COUNT.set(0);
         ROOM_RESPONSE_CODE.set(200);
@@ -163,7 +177,7 @@ class BookingHttpFlowIT {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + bookingPort + "/api/bookings"))
                 .header("Content-Type", "application/json")
-                .header("X-User-Id", "user-123")
+                .header("Authorization", "Bearer user-123")
                 .header("X-Correlation-Id", correlationId)
                 .POST(HttpRequest.BodyPublishers.ofString("""
                         {
@@ -365,7 +379,7 @@ class BookingHttpFlowIT {
         HttpRequest.Builder request = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + bookingPort + path));
         if (userId != null) {
-            request.header("X-User-Id", userId);
+            request.header("Authorization", "Bearer " + userId);
         }
         if (body == null) {
             request.method(method, HttpRequest.BodyPublishers.noBody());

@@ -1,0 +1,59 @@
+{
+  "realm": "meeting-room",
+  "enabled": true,
+
+  "roles": {
+    "realm": [
+      { "name": "ROLE_USER" },
+      { "name": "ROLE_ADMIN" }
+    ]
+  },
+
+  "clients": [
+    {
+      "clientId": "meeting-room-api",
+      "name": "Meeting Room API",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "redirectUris": ["http://localhost:*/*"],
+      "webOrigins": ["+"]
+    }
+  ],
+
+  "users": [
+    {
+      "username": "user",
+      "firstName": "Normal",
+      "lastName": "User",
+      "email": "user@test.com",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["ROLE_USER"]
+    },
+    {
+      "username": "admin",
+      "firstName": "System",
+      "lastName": "Admin",
+      "email": "admin@test.com",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["ROLE_ADMIN"]
+    }
+  ]
+}

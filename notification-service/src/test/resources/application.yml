@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: notification-service-test
+  cloud:
+    config:
+      enabled: false
+    bus:
+      enabled: false
+  rabbitmq:
+    listener:
+      simple:
+        acknowledge-mode: auto
+        retry:
+          enabled: true
+          initial-interval: 100
+          max-attempts: 3
+          multiplier: 1.0
+          max-interval: 1000
+        default-requeue-rejected: false
+
+eureka:
+  client:
+    enabled: false

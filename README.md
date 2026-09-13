@@ -2,7 +2,7 @@
 
 This repository builds a meeting room booking system incrementally. The goal is to understand each architectural decision, not to introduce the entire microservices stack at once.
 
-## Current milestone: Phase 3 CI completed; preparing for JWT security
+## Current milestone: Phase 6 security foundation complete
 
 The repository currently contains:
 
@@ -22,7 +22,9 @@ The repository currently contains:
 - A `POST /api/bookings` endpoint with validation and consistent API errors.
 - A synchronous Room Service HTTP adapter behind a replaceable `RoomCatalog` port.
 - Active-room, overlap, and database-race checks coordinated by an application service.
-- A temporary `X-User-Id` development boundary that will later be replaced by JWT identity.
+- Keycloak-issued JWT authentication at the gateway and both business services.
+- Role-based authorization with `ROLE_USER` and `ROLE_ADMIN`.
+- Booking ownership derived from the JWT `sub` claim; the temporary `X-User-Id` boundary is removed.
 - Owner-filtered `GET /api/bookings/me` and `GET /api/bookings/{id}` endpoints.
 - Idempotent `DELETE /api/bookings/{id}` cancellation that preserves booking history.
 - Foreign booking IDs are hidden behind the same `404` response as missing bookings.
@@ -237,7 +239,18 @@ The Redis connection defaults to `localhost:6379`. Override it with `REDIS_HOST`
 an interim choice until Keycloak/JWT support lets the gateway key limits by the
 authenticated user.
 
+## Phase 6 security
+
+Start Keycloak with `docker compose -f docker/compose.yml up -d keycloak`. The imported
+`meeting-room` realm contains the public `meeting-room-api` client, `ROLE_USER`,
+`ROLE_ADMIN`, and learning-only `user/user` and `admin/admin` accounts. Production
+credentials must be supplied outside source control.
+
+The gateway, Room Service, and Booking Service validate bearer JWTs independently.
+The gateway rate limiter now keys booking creation by the authenticated JWT subject.
+Users can view rooms and manage only their own bookings; administrators can manage
+rooms and use `GET /api/bookings/all`.
+
 ## Next milestone
 
-Introduce Keycloak and JWT security, then replace the rate-limit key with the
-authenticated user identity.
+Complete a live Keycloak smoke test and continue Phase 6 security hardening.
