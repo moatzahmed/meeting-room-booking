@@ -5,6 +5,7 @@ import com.learning.meetingrooms.booking.application.BookingService;
 import com.learning.meetingrooms.booking.domain.BookingStatus;
 import com.learning.meetingrooms.booking.domain.BookingTimeRange;
 import com.learning.meetingrooms.booking.repository.BookingRepository;
+import com.learning.meetingrooms.booking.application.BookingEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -17,7 +18,6 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -40,6 +40,9 @@ class BookingRepositoryIT {
 
     @MockitoBean
     private JwtDecoder jwtDecoder;
+
+    @MockitoBean
+    private BookingEventPublisher eventPublisher;
 
     @Autowired
     private BookingService bookingService;
