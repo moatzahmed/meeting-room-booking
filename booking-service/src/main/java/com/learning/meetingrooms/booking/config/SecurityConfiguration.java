@@ -3,7 +3,6 @@ package com.learning.meetingrooms.booking.config;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.core.GrantedAuthority;
@@ -22,8 +21,16 @@ public class SecurityConfiguration {
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http.csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        .requestMatchers(
+                                "/actuator/health",
+                                "/actuator/info",
+                                "/actuator/circuitbreakers",
+                                "/actuator/retries",
+                                "/actuator/bulkheads",
+                                "/v3/api-docs/**"
+                        ).permitAll()
                         .requestMatchers("/api/bookings/all").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/bookings").hasRole("USER")
                         .requestMatchers("/api/bookings/**").hasRole("USER" )
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(keycloakConverter())));

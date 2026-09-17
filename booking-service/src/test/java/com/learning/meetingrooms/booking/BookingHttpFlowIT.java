@@ -1,5 +1,6 @@
 package com.learning.meetingrooms.booking;
 
+import com.learning.meetingrooms.booking.application.BookingEventPublisher;
 import com.learning.meetingrooms.booking.repository.BookingRepository;
 import io.github.resilience4j.bulkhead.BulkheadRegistry;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
@@ -86,6 +87,9 @@ class BookingHttpFlowIT {
 
     @MockitoBean
     private JwtDecoder jwtDecoder;
+
+    @MockitoBean
+    private BookingEventPublisher eventPublisher;
 
     @Autowired
     private CircuitBreakerRegistry circuitBreakerRegistry;
@@ -177,7 +181,7 @@ class BookingHttpFlowIT {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + bookingPort + "/api/bookings"))
                 .header("Content-Type", "application/json")
-                .header("Authorization", "Bearer user-123")
+                .header("Authorization", "Bearer " + "user-123")
                 .header("X-Correlation-Id", correlationId)
                 .POST(HttpRequest.BodyPublishers.ofString("""
                         {
